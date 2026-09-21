@@ -3,7 +3,7 @@
  * stale in both — the login page still said 0.1.1 and the identity screen said
  * 0.1.5 while the build was 0.1.8.
  */
-export const APP_VERSION = '0.1.17';
+export const APP_VERSION = '0.1.18';
 
 export interface AuthenticatedUser {
   accountId: string;

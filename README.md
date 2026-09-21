@@ -1,4 +1,4 @@
-# JusPol EDRMS — V0.1.17
+# JusPol EDRMS — V0.1.18
 
 Electronic Document and Records Management System for the Ministry of Justice and
 Police, Suriname. Delivery 1 — Head Office Proof of Concept.
@@ -22,6 +22,7 @@ Delivery 1 to date:
 - **V0.1.15** — possible-duplicate warning at registration (FR-COR-016)
 - **V0.1.16** — OCR text as retrieval assistance, off by default (FR-COR-015)
 - **V0.1.17** — PDF text-layer reading, under the same switch
+- **V0.1.18** — consolidation: cumulative verification, consolidated tester pack
 
 Record-level permission evaluation (Gate 4, waits on DEC-02) and search are not built yet.
 
