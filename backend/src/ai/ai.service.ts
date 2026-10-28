@@ -556,7 +556,7 @@ export class AiService {
     const dir = en ? { INCOMING: 'Incoming', OUTGOING: 'Outgoing', INTERNAL: 'Internal' }[item.direction] : { INCOMING: 'Inkomend', OUTGOING: 'Uitgaand', INTERNAL: 'Intern' }[item.direction];
     facts.push(
       en
-        ? `${dir} letter${item.party ? ` from ${item.party}` : ''}${item.documentDate ? `, dated ${item.documentDate}` : ''}${item.senderReference ? `, their reference ${item.senderReference}` : ''}.`
+        ? `${dir} letter${item.party ? ` from ${item.party}` : ''}${item.documentDate ? `, dated ${readableDate(item.documentDate)}` : ''}${item.senderReference ? `, their reference ${item.senderReference}` : ''}.`
         : `${dir} stuk${item.party ? ` van ${item.party}` : ''}${item.documentDate ? `, gedateerd ${longDutchDate(item.documentDate)}` : ''}${item.senderReference ? `, kenmerk afzender ${item.senderReference}` : ''}.`,
     );
     if (p.requests.length) facts.push(en ? `Request: ${excerpt(p.requests[0], 220)}` : `Verzoek: ${excerpt(p.requests[0], 220)}`);
@@ -644,8 +644,8 @@ export class AiService {
       const last = items[items.length - 1];
       bullets.push(
         en
-          ? `${items.length} record${items.length === 1 ? '' : 's'} (${incoming} incoming, ${outgoing} outgoing); latest: "${excerpt(last.subject, 90)}"${last.party ? ` from ${last.party}` : ''}${last.registered_on ? ` (${last.registered_on})` : ''}.`
-          : `${items.length} stuk${items.length === 1 ? '' : 'ken'} (${incoming} inkomend, ${outgoing} uitgaand); laatste: "${excerpt(last.subject, 90)}"${last.party ? ` van ${last.party}` : ''}${last.registered_on ? ` (${last.registered_on})` : ''}.`,
+          ? `${items.length} record${items.length === 1 ? '' : 's'} (${incoming} incoming, ${outgoing} outgoing); latest: "${excerpt(last.subject, 90)}"${last.party ? ` from ${last.party}` : ''}${last.registered_on ? ` (${readableDate(last.registered_on)})` : ''}.`
+          : `${items.length} stuk${items.length === 1 ? '' : 'ken'} (${incoming} inkomend, ${outgoing} uitgaand); laatste: "${excerpt(last.subject, 90)}"${last.party ? ` van ${last.party}` : ''}${last.registered_on ? ` (${longDutchDate(last.registered_on)})` : ''}.`,
       );
     } else bullets.push(en ? 'No records linked yet.' : 'Er zijn nog geen stukken gekoppeld.');
     if (tasks.open || tasks.done) {
@@ -664,8 +664,8 @@ export class AiService {
       const e = events[0];
       bullets.push(
         en
-          ? `Last step: ${e.event_type.toLowerCase().replace(/_/g, ' ')} by ${e.name} on ${e.occurred_on}${e.reason ? ` — "${excerpt(e.reason, 120)}"` : ''}.`
-          : `Laatste stap: ${EVENT_NL[e.event_type] ?? e.event_type.toLowerCase()} door ${e.name} op ${e.occurred_on}${e.reason ? ` — "${excerpt(e.reason, 120)}"` : ''}.`,
+          ? `Last step: ${e.event_type.toLowerCase().replace(/_/g, ' ')} by ${e.name} on ${readableDate(e.occurred_on)}${e.reason ? ` — "${excerpt(e.reason, 120)}"` : ''}.`
+          : `Laatste stap: ${EVENT_NL[e.event_type] ?? e.event_type.toLowerCase()} door ${e.name} op ${longDutchDate(e.occurred_on)}${e.reason ? ` — "${excerpt(e.reason, 120)}"` : ''}.`,
       );
     }
     const sentences: KeySentence[] = keySentences(

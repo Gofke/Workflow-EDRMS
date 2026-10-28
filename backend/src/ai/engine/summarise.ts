@@ -5,7 +5,7 @@
  * contains sentences that are really in the record — nothing is invented.
  */
 import { REQUEST } from './extract';
-import { cosine, idfOf, sentences, vector } from './text';
+import { cosine, idfOf, letterBody, sentences, vector } from './text';
 
 export interface KeySentence {
   text: string;
@@ -19,7 +19,7 @@ const BOILERPLATE = /^(geachte|dear|hoogachtend|met vriendelijke groet|yours sin
 export function keySentences(sources: { text: string; source: string }[], max = 5): KeySentence[] {
   const all: { text: string; source: string; position: number }[] = [];
   for (const s of sources) {
-    sentences(s.text).forEach((text, position) => {
+    sentences(letterBody(s.text)).forEach((text, position) => {
       if (!BOILERPLATE.test(text) && text.length <= 600) all.push({ text, source: s.source, position });
     });
   }

@@ -5,7 +5,7 @@ import { searchHelp } from '../src/ai/engine/help';
 import { topicsIn } from '../src/ai/engine/lexicon';
 import { proposeActions } from '../src/ai/engine/notes';
 import { keySentences } from '../src/ai/engine/summarise';
-import { detectLanguage, trigramSimilarity } from '../src/ai/engine/text';
+import { detectLanguage, letterBody, sentences, trigramSimilarity } from '../src/ai/engine/text';
 
 /** The built-in engine's pieces, on their own, with the cases that matter in a ministry's post. */
 describe('Phase 3 assistant engine', () => {
@@ -77,6 +77,33 @@ describe('Phase 3 assistant engine', () => {
     expect(k.length).toBe(3);
     for (const s of k) expect(text).toContain(s.text);
     expect(k.filter((s) => s.text.startsWith('De heer Pinas verzoekt')).length).toBe(1);
+  });
+
+  it('quotes the body of a letter, not its letterhead, address or signature', () => {
+    const letter = [
+      'Hof van Justitie',
+      'Gravenstraat 2, Paramaribo',
+      '',
+      'Aan de Minister van Justitie en Politie',
+      'Henck Arronstraat 3',
+      'Paramaribo, 19 april 2026',
+      'Ons kenmerk: AR 25-1182',
+      'Onderwerp: Oproeping Bouwbedrijf Santo N.V. tegen de Staat',
+      'Excellentie,',
+      'Hierbij wordt de Staat opgeroepen te verschijnen in de procedure inzake de',
+      'aanbesteding van het justitiecomplex. Wij verzoeken u dhr. R. Pinas i.v.m. de zitting aan te wijzen.',
+      'Hoogachtend,',
+      'mr. C. Pinas-Lie',
+      'Griffier',
+    ].join('\n');
+    const body = letterBody(letter);
+    expect(body).not.toMatch(/Gravenstraat|Arronstraat|kenmerk|Onderwerp|Hoogachtend|Griffier/);
+    expect(sentences(body)).toEqual([
+      'Hierbij wordt de Staat opgeroepen te verschijnen in de procedure inzake de aanbesteding van het justitiecomplex.',
+      'Wij verzoeken u dhr. R. Pinas i.v.m. de zitting aan te wijzen.',
+    ]);
+    expect(keySentences([{ text: letter, source: 'IN-1' }], 3).every((s) => !/Arronstraat|Excellentie/.test(s.text))).toBe(true);
+    expect(extractIntake(letter, today).requests).toEqual(['Wij verzoeken u dhr. R. Pinas i.v.m. de zitting aan te wijzen.']);
   });
 
   it('turns notes into actions with people, dates and priorities', () => {

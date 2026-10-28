@@ -45,12 +45,63 @@ export function stems(text: string): string[] {
   return tokens(text).map(stem);
 }
 
+/**
+ * Initials ("R."), "N.V." and common Dutch and English abbreviations end in a
+ * full stop that does not end the sentence. They are protected while splitting.
+ */
+const ABBREVIATION =
+  /(^|[\s(])((?:i\.v\.m|m\.b\.t|t\.a\.v|z\.s\.m|n\.a\.v|i\.o\.m|e\.g|i\.e|o\.a|d\.d|c\.q|e\.d|e\.a|dhr|mevr|mw|mrs|mr|ms|nr|no|bijv|bv|art|ca|jl|resp|drs|ir|ing|dr|prof|blz|st|vs|zgn|[A-ZÀ-Ý]))\./gi;
+const KEEP = '\uE000';
+
 export function sentences(text: string): string[] {
   return (text ?? '')
     .replace(/\r/g, '')
+    .replace(ABBREVIATION, (_m, lead: string, word: string) => `${lead}${word.replace(/\./g, KEEP)}${KEEP}`)
     .split(/(?<=[.!?])\s+(?=[A-ZÀ-Ý0-9"“(])|\n{2,}/)
-    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .map((s) => s.replace(/\s+/g, ' ').replace(/\uE000/g, '.').trim())
     .filter((s) => s.length > 12);
+}
+
+const SALUTATION = /^(zeer\s+)?(hoog)?geachte\b|^excellentie\b|^beste\b|^dear\b|^your excellency\b|^mijnheer\b|^mevrouw\b/i;
+const CLOSING =
+  /^(hoogachtend|met (de meeste )?hoogachting|met (vriendelijke|hartelijke|collegiale) groet(en)?|vriendelijke groet(en)?|yours (sincerely|faithfully|truly)|kind regards|best regards|sincerely)\b/i;
+const HEADER_LINE =
+  /^(aan|to|ons kenmerk|uw kenmerk|kenmerk|our ref(erence)?|your ref(erence)?|ref\.?|onderwerp|betreft|subject|re|datum|date|bijlage[n]?|enclosures?|cc|kopie|tel(efoon)?|fax|e-?mail|website)\b\s*[:.]?/i;
+const PLACE_DATE = /^[A-Z][a-zA-Z-]+,\s+\d{1,2}\s+[a-z]+\s+\d{4}$/;
+
+/**
+ * The body of a letter: what stands between the salutation and the closing,
+ * without the letterhead, address block, reference lines and signature. Line
+ * breaks inside a paragraph become spaces. Text that is not laid out as a
+ * letter comes back unchanged apart from dropping obvious header lines.
+ */
+export function letterBody(text: string): string {
+  const lines = (text ?? '').replace(/\r/g, '').split('\n');
+  const start = lines.findIndex((l) => SALUTATION.test(l.trim()) && l.trim().length <= 70);
+  let body = lines;
+  if (start >= 0) {
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((l) => CLOSING.test(l.trim()));
+    body = end >= 0 ? rest.slice(0, end) : rest;
+  } else {
+    const end = lines.findIndex((l) => CLOSING.test(l.trim()));
+    if (end >= 0) body = lines.slice(0, end);
+    body = body.filter((l) => !HEADER_LINE.test(l.trim()) && !PLACE_DATE.test(l.trim()));
+  }
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const raw of body) {
+    const line = raw.trim();
+    if (!line) {
+      if (current.length) paragraphs.push(current.join(' '));
+      current = [];
+      continue;
+    }
+    current.push(line);
+  }
+  if (current.length) paragraphs.push(current.join(' '));
+  const joined = paragraphs.join('\n\n').trim();
+  return joined || (text ?? '');
 }
 
 /** Stems cut to six letters: lets "registreer", "registreren" and "geregistreerd" meet. */

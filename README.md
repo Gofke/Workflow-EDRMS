@@ -144,7 +144,7 @@ cd frontend && npm test                                     # component tests
 
 The integration suite runs against a real, dedicated test database, because
 much of what it protects (append-only audit rules, the hash chain, triggers,
-constraints) lives in the database. 27 spec files cover authentication,
+constraints) lives in the database. 24 spec files cover authentication,
 administration, registration, dossiers, documents, delegation, workflow,
 timeline, tasks, approvals, case files, letters and seals, notifications,
 search and dashboards, the assistant, oversight and integrations. The

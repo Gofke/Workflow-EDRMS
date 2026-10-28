@@ -7,7 +7,7 @@
  * it was suggested and correct it. Nothing is filled in without them.
  */
 import { documentDate, findDeadlines, Deadline } from './dates';
-import { detectLanguage, excerpt, sentences } from './text';
+import { detectLanguage, excerpt, letterBody, sentences } from './text';
 
 export interface Proposal<T> {
   value: T;
@@ -128,7 +128,7 @@ export function extractIntake(text: string, reference: string): IntakeProposals 
     senderReference: referenceOf(text),
     deadlines,
     classification: classificationOf(text),
-    requests: sentences(text)
+    requests: sentences(letterBody(text))
       .filter((s) => REQUEST.test(s) && !SUBJECT_LABEL.test(s))
       .slice(0, 5)
       .map((s) => excerpt(s, 300)),
