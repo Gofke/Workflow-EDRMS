@@ -1,3 +1,4 @@
+import { isLocalAddress } from '../ai/llm';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
@@ -196,7 +197,7 @@ function validate(key: SettingKey, v: Settings[SettingKey]): void {
       const a = v as Settings['ai'];
       if (!PROVIDERS.includes(a.provider)) fail('Unknown AI provider.');
       if (a.provider !== 'builtin' && !/^https?:\/\/[^\s]+$/.test(a.baseUrl)) fail('The AI address must be a URL.');
-      const external = a.provider !== 'builtin' && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.baseUrl);
+      const external = a.provider !== 'builtin' && !isLocalAddress(a.baseUrl);
       if (external && !a.externalProviderAcknowledged) {
         fail('This AI address is outside the ministry network. Confirm that data may leave the server before choosing it.');
       }
