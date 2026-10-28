@@ -10,5 +10,6 @@ import { TimelineService } from './timeline.service';
   imports: [TypeOrmModule.forFeature([Dossier]), AuthModule, AuditModule],
   controllers: [TimelineController],
   providers: [TimelineService],
+  exports: [TimelineService],
 })
 export class TimelineModule {}

@@ -16,9 +16,10 @@ import { OrgModule } from './org/org.module';
 import { TasksModule } from './tasks/tasks.module';
 import { DeadlinesModule } from './deadlines/deadlines.module';
 import { LettersModule } from './letters/letters.module';
+import { CaseFilesModule } from './casefiles/casefiles.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, DeadlinesModule, LettersModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, DeadlinesModule, LettersModule, CaseFilesModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })
 export class AppModule {}
