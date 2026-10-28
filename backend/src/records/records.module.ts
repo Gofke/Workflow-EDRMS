@@ -30,5 +30,6 @@ import { RegistrationService } from './registration.service';
     DelegationModule,],
   controllers: [RecordsController, DossierController],
   providers: [RegistrationService, DossierService, ResponsibilityService, DossierClosureService, DuplicateService],
+  exports: [RegistrationService, DossierService, ResponsibilityService, DuplicateService],
 })
 export class RecordsModule {}

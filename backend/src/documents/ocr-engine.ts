@@ -72,3 +72,34 @@ export async function extractPdfText(bytes: Buffer, config: OcrConfig): Promise<
     await rm(workspace, { recursive: true, force: true });
   }
 }
+
+/**
+ * V0.3.0 — reads a scanned PDF: each page is rendered to an image with the
+ * configured renderer (pdftoppm, poppler-utils) and read by the OCR engine.
+ * Bounded in pages and time; the same sandboxing as above.
+ */
+export async function extractScannedPdfText(bytes: Buffer, config: OcrConfig): Promise<TextResult> {
+  const workspace = await mkdtemp(join(tmpdir(), 'juspol-pdfocr-'));
+  const input = join(workspace, 'input.pdf');
+  try {
+    await writeFile(input, bytes);
+    await run(config.pdfRenderCommand, ['-r', '200', '-png', '-l', String(config.pdfMaxPages), input, join(workspace, 'page')], {
+      timeout: config.timeoutMs,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    const { readdir } = await import('fs/promises');
+    const pages = (await readdir(workspace)).filter((f) => f.startsWith('page') && f.endsWith('.png')).sort();
+    const parts: string[] = [];
+    for (const page of pages) {
+      const base = join(workspace, `${page}.out`);
+      await run(config.command, [join(workspace, page), base, '-l', config.languages], { timeout: config.timeoutMs, maxBuffer: 8 * 1024 * 1024 });
+      parts.push((await readFile(`${base}.txt`, 'utf8')).trim());
+    }
+    return {
+      text: parts.join('\n\n').slice(0, config.maxCharacters).trim(),
+      engine: `${config.pdfRenderCommand} + ${config.command} (${config.languages}), ${pages.length} page(s)`,
+    };
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+}

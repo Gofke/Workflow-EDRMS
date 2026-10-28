@@ -43,6 +43,10 @@ export class DocumentText {
   @Column({ name: 'languages', type: 'varchar', length: 100, nullable: true })
   languages: string | null;
 
+  /** V0.3.0 — TEXT_LAYER, IMAGE_OCR or PAGE_OCR: how the text was obtained. */
+  @Column({ name: 'method', type: 'varchar', length: 20, nullable: true })
+  method: string | null;
+
   @Column({ name: 'extracted_at', type: 'timestamptz', default: () => 'now()' })
   extractedAt: Date;
 }

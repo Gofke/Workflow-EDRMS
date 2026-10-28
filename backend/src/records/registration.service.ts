@@ -7,6 +7,7 @@ import { loadRegistrationConfig } from '../config/registration-config';
 import { CorrespondenceItem, ItemState } from './correspondence-item.entity';
 import { CreateDraftDto, ItemView, UpdateDraftDto } from './records.dto';
 import { AccessService } from '../access/access.service';
+import { newTrackingCode } from '../common/codes';
 import { SettingsService } from '../settings/settings.service';
 
 export interface Actor {
@@ -180,6 +181,15 @@ export class RegistrationService {
     });
 
     void identity;
+    // V0.3.0: an incoming letter gets a tracking code for its sender.
+    if (item.direction === 'INCOMING') {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const inserted = await this.dataSource
+          .query(`INSERT INTO item_tracking (item_id, tracking_code) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING item_id`, [id, newTrackingCode()])
+          .catch(() => []);
+        if (inserted.length) break;
+      }
+    }
     return toView(await this.load(id));
   }
 

@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
+import { MalwareScanService } from '../core/malware-scan.service';
 import { loadDocumentConfig } from '../config/document-config';
 import { CorrespondenceItem } from '../records/correspondence-item.entity';
 import { Actor } from '../records/registration.service';
@@ -17,7 +18,7 @@ import { loadOcrConfig } from '../config/ocr-config';
 import { CapturedDocument } from './captured-document.entity';
 import { DocumentText, DocumentTextStatus } from './document-text.entity';
 import { DocumentStorage, IntegrityError } from './document-storage';
-import { extractPdfText, extractText } from './ocr-engine';
+import { extractPdfText, extractScannedPdfText, extractText } from './ocr-engine';
 
 /**
  * Derived text for one document (FR-COR-015).
@@ -32,6 +33,8 @@ export interface DocumentTextView {
   text: string | null;
   engine: string | null;
   languages: string | null;
+  /** V0.3.0 — how the text was obtained. */
+  method?: string | null;
   extractedAt: string | null;
   /** True when the text was read from content that has since changed. */
   stale: boolean;
@@ -63,6 +66,7 @@ export class DocumentsService {
     private readonly texts: Repository<DocumentText>,
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly scanner: MalwareScanService,
   ) {}
 
   /**
@@ -92,6 +96,21 @@ export class DocumentsService {
       throw new UnsupportedMediaTypeException(
         `Files of type ${file.mimetype} are not accepted. Accepted types: ${this.config.allowedMediaTypes.join(', ')}.`,
       );
+    }
+
+    // V0.3.0: the malware check runs before anything is written to storage.
+    try {
+      await this.scanner.assertClean(file.buffer, file.originalname ?? 'document', actor.accountId);
+    } catch (error) {
+      await this.audit.record({
+        eventType: AuditEventType.DOCUMENT_REJECTED_MALWARE,
+        actorAccountId: actor.accountId,
+        actorDescription: actor.description,
+        subjectDescription: `${item.registrationIdentity ?? 'draft'} — ${item.subject}`.slice(0, 260),
+        newValue: sanitiseName(file.originalname).slice(0, 400),
+        summary: `An upload of ${sanitiseName(file.originalname)} by ${actor.description} was refused by the malware check.`.slice(0, 600),
+      });
+      throw error;
     }
 
     const { storageKey, contentHash } = await this.storage.put(file.buffer);
@@ -164,13 +183,26 @@ export class DocumentsService {
       return;
     }
     try {
-      const { text, engine } = await reader(bytes, this.ocr);
+      let { text, engine } = await reader(bytes, this.ocr);
+      let method = reader === extractText ? 'IMAGE_OCR' : 'TEXT_LAYER';
+      // V0.3.0: a PDF that is only a scanned page has no text layer. Its pages
+      // are rendered to images and read by OCR, so paper intake is searchable.
+      if (text.length === 0 && reader === extractPdfText && this.ocr.pdfRasterise) {
+        // A PDF the renderer cannot open stays "read and empty", as before.
+        const pages = await extractScannedPdfText(bytes, this.ocr).catch(() => null);
+        if (pages) {
+          text = pages.text;
+          engine = pages.engine;
+          method = 'PAGE_OCR';
+        }
+      }
       await this.recordText(
         documentId,
         contentHash,
         text.length > 0 ? DocumentTextStatus.EXTRACTED : DocumentTextStatus.EMPTY,
         text.length > 0 ? text : null,
         engine,
+        method,
       );
     } catch {
       // Deliberately swallowed. The capture has already succeeded and the
@@ -191,17 +223,49 @@ export class DocumentsService {
     status: DocumentTextStatus,
     text: string | null,
     engine: string | null,
+    method: string | null = null,
   ): Promise<void> {
     await this.dataSource.query(
       `INSERT INTO document_text (captured_document_id, content_hash, status, extracted_text,
-         engine, languages)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         engine, languages, method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (captured_document_id) DO UPDATE
           SET content_hash = EXCLUDED.content_hash, status = EXCLUDED.status,
               extracted_text = EXCLUDED.extracted_text, engine = EXCLUDED.engine,
-              languages = EXCLUDED.languages, extracted_at = now()`,
-      [documentId, contentHash, status, text, engine, engine ? this.ocr.languages : null],
+              languages = EXCLUDED.languages, method = EXCLUDED.method, extracted_at = now()`,
+      [documentId, contentHash, status, text, engine, engine ? this.ocr.languages : null, method],
     );
+  }
+
+  /**
+   * V0.3.0: the document must belong to the record named in the address, so a
+   * reachable record can never be used to fetch a document of another one.
+   */
+  async assertBelongs(documentId: string, itemId: string): Promise<void> {
+    if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw new NotFoundException('Unknown captured document.');
+    const rows = await this.dataSource.query(
+      `SELECT 1 FROM captured_document WHERE id = $1 AND correspondence_item_id = $2`,
+      [documentId, itemId],
+    );
+    if (!rows.length) throw new NotFoundException('Unknown captured document.');
+  }
+
+  /** Re-reads the stored bytes and compares them with the recorded fingerprint. */
+  async verify(documentId: string): Promise<{ documentId: string; contentHash: string; intact: boolean; checkedAt: string; byteSize: number }> {
+    const document = await this.load(documentId);
+    let intact = true;
+    try {
+      await this.storage.get(document.storageKey, document.contentHash);
+    } catch {
+      intact = false;
+    }
+    return { documentId, contentHash: document.contentHash, intact, checkedAt: new Date().toISOString(), byteSize: Number(document.byteSize) };
+  }
+
+  /** The stored bytes of a document, verified, without an access record. For server-side use only. */
+  async bytesOf(documentId: string): Promise<{ bytes: Buffer; document: CapturedDocument }> {
+    const document = await this.load(documentId);
+    return { bytes: await this.storage.get(document.storageKey, document.contentHash), document };
   }
 
   /** The derived text, if any. Reading it never touches the document. */
@@ -226,6 +290,7 @@ export class DocumentsService {
       text: text.extractedText,
       engine: text.engine,
       languages: text.languages,
+      method: text.method,
       extractedAt: text.extractedAt.toISOString(),
       stale: text.contentHash !== document.contentHash,
       derived: true,

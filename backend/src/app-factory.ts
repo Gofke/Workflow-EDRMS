@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import session from 'express-session';
 import helmet from 'helmet';
+import express from 'express';
 import { AppModule } from './app.module';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -46,6 +47,8 @@ export async function createApp(): Promise<INestApplication> {
   const idleMinutes = Number(process.env.SESSION_IDLE_MINUTES ?? 30);
 
   app.use(helmet());
+  // The mail gateway delivers a raw RFC 822 message, not JSON.
+  app.use('/api/intake/email/gateway', express.raw({ type: () => true, limit: process.env.INTAKE_MAX_BYTES ?? '30mb' }));
   app.enableCors({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
     credentials: true,

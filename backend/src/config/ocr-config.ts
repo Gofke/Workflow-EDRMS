@@ -25,6 +25,10 @@ export interface OcrConfig {
   pdfCommand: string;
   pdfMediaTypes: string[];
   maxCharacters: number;
+  /** V0.3.0 — render a scanned PDF's pages and read them by OCR. */
+  pdfRasterise: boolean;
+  pdfRenderCommand: string;
+  pdfMaxPages: number;
 }
 
 const DEFAULT_TYPES = ['image/jpeg', 'image/png', 'image/tiff'];
@@ -46,5 +50,8 @@ export function loadOcrConfig(): OcrConfig {
       .map((type) => type.trim())
       .filter(Boolean),
     maxCharacters: Number(process.env.OCR_MAX_CHARACTERS ?? 200_000),
+    pdfRasterise: process.env.OCR_PDF_PAGES !== 'false',
+    pdfRenderCommand: process.env.PDF_RENDER_COMMAND ?? 'pdftoppm',
+    pdfMaxPages: Number(process.env.OCR_PDF_MAX_PAGES ?? 10),
   };
 }

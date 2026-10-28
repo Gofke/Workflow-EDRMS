@@ -79,7 +79,11 @@ export class SealService implements OnModuleInit {
     }
   }
 
-  async seal(subjectType: 'DOCUMENT' | 'DOSSIER' | 'PACKAGE', subjectId: string, payload: Record<string, unknown>, sealedBy: string): Promise<SealResult> {
+  /**
+   * `id` may be given when the sealed content must carry its own seal's
+   * address — a letter whose QR code points at its verification page.
+   */
+  async seal(subjectType: 'DOCUMENT' | 'DOSSIER' | 'PACKAGE', subjectId: string, payload: Record<string, unknown>, sealedBy: string, id?: string): Promise<SealResult> {
     this.load();
     // The ministry key must be registered before a seal may reference it.
     await this.dataSource.query(
@@ -90,9 +94,9 @@ export class SealService implements OnModuleInit {
     const payloadHash = createHash('sha256').update(canonical).digest('hex');
     const signature = sign(null, Buffer.from(canonical), this.privateKey as KeyObject).toString('base64');
     const [row] = await this.dataSource.query(
-      `INSERT INTO document_seal (subject_type, subject_id, payload, payload_hash, signature, key_id, sealed_by_account_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, sealed_at`,
-      [subjectType, subjectId, canonical, payloadHash, signature, this.keyIdValue, sealedBy],
+      `INSERT INTO document_seal (id, subject_type, subject_id, payload, payload_hash, signature, key_id, sealed_by_account_id)
+       VALUES (coalesce($8::uuid, gen_random_uuid()), $1, $2, $3, $4, $5, $6, $7) RETURNING id, sealed_at`,
+      [subjectType, subjectId, canonical, payloadHash, signature, this.keyIdValue, sealedBy, id ?? null],
     );
     return { id: row.id, keyId: this.keyIdValue, signature, payloadHash, sealedAt: new Date(row.sealed_at).toISOString() };
   }
