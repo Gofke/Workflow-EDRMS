@@ -26,6 +26,13 @@ import { Finalisation1758900000000 } from '../migrations/1758900000000-Finalisat
 import { DossierClosure1759000000000 } from '../migrations/1759000000000-DossierClosure';
 import { DuplicateLookup1759100000000 } from '../migrations/1759100000000-DuplicateLookup';
 import { DocumentText1759200000000 } from '../migrations/1759200000000-DocumentText';
+import { Phase3Foundation1759300000000 } from '../migrations/1759300000000-Phase3Foundation';
+import { Tasks1759400000000 } from '../migrations/1759400000000-Tasks';
+import { Notifications1759500000000 } from '../migrations/1759500000000-Notifications';
+import { Letters1759600000000 } from '../migrations/1759600000000-Letters';
+import { CaseFiles1759700000000 } from '../migrations/1759700000000-CaseFiles';
+import { Approvals1759800000000 } from '../migrations/1759800000000-Approvals';
+import { SearchAiIntegrations1759900000000 } from '../migrations/1759900000000-SearchAiIntegrations';
 
 dotenv.config();
 
@@ -60,6 +67,13 @@ export const dataSourceOptions = {
     DossierClosure1759000000000,
     DuplicateLookup1759100000000,
     DocumentText1759200000000,
+    Phase3Foundation1759300000000,
+    Tasks1759400000000,
+    Notifications1759500000000,
+    Letters1759600000000,
+    CaseFiles1759700000000,
+    Approvals1759800000000,
+    SearchAiIntegrations1759900000000,
   ],
   // Never true. The schema changes only through a reviewed migration.
   synchronize: false,

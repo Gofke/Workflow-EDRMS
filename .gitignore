@@ -29,3 +29,10 @@ coverage/
 # Temporary files
 *.tmp
 *.swp
+
+# Keys and stored documents are created by the server and never shipped
+keys/
+backend/keys/
+test-captured-documents/
+backend/test-captured-documents/
+backups/

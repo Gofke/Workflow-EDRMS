@@ -46,7 +46,17 @@ export async function startHarness(): Promise<Harness> {
  */
 export async function truncateAll(db: DataSource): Promise<void> {
   await db.query(
-    `TRUNCATE document_text, dossier_state_event, workflow_event, delegation, captured_document, responsibility_assignment, due_date_change,
+    `TRUNCATE integrity_anchor, exchange_log, exchange_partner, integration_receipt, integration_client,
+              chat_message, ai_feedback, ai_interaction, saved_search,
+              document_seal, seal_key, out_of_office, advice_request, route_step_decision, dossier_route,
+              archive_transfer, legal_hold_event, retention_decision, dossier_relation,
+              document_scan, email_intake, tracking_lookup, item_tracking, letter_template, item_draft_version,
+              job_run, public_holiday, deadline_notice, push_subscription, sms_outbox, email_outbox,
+              account_contact, notification_preference, notification,
+              task_event, task_attachment, task_mention, task_comment, task_checklist_item, task_audience, task, task_template,
+              record_view_event, record_access_grant, classification_change, account_mfa, login_attempt, system_setting,
+              approval_route, dossier_category,
+              document_text, dossier_state_event, workflow_event, delegation, captured_document, responsibility_assignment, due_date_change,
               dossier_link, dossier,
               correspondence_item, audit_event, role_assignment,
               account, person, functional_role, organisational_unit, user_session
@@ -54,6 +64,7 @@ export async function truncateAll(db: DataSource): Promise<void> {
   );
   await db.query(`ALTER SEQUENCE registration_sequence RESTART WITH 1`);
   await db.query(`ALTER SEQUENCE dossier_sequence RESTART WITH 1`);
+  await db.query(`ALTER SEQUENCE task_sequence RESTART WITH 1`);
 }
 
 /** Seeds the same actors as the pilot seed, reusing its data rather than copying it. */
