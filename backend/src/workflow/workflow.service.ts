@@ -4,6 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../core/notification.service';
+import { SettingsService } from '../settings/settings.service';
 import { loadWorkflowConfig } from '../config/workflow-config';
 import { DelegationService } from '../delegation/delegation.service';
 import { Account } from '../identity/account.entity';
@@ -27,6 +28,7 @@ export class WorkflowService {
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** Officials who may be designated as reviewer (FR-WFL-002, FR-WFL-004). */
@@ -66,6 +68,16 @@ export class WorkflowService {
       throw new BadRequestException('You cannot send a matter to yourself for review.');
     }
     await this.assertReviewAuthority(reviewerAccountId);
+    // V0.3.0: where configured, a matter waits for the advice it asked for.
+    if ((await this.settings.get('workflow')).blockSubmitWithOpenAdvice) {
+      const [{ open }] = await this.dataSource.query(
+        `SELECT count(*)::int AS open FROM advice_request WHERE dossier_id = $1 AND status = 'OPEN'`,
+        [dossierId],
+      );
+      if (open > 0) {
+        throw new BadRequestException(`This matter is still waiting for ${open} advice request(s). Wait for the advice or withdraw the request.`);
+      }
+    }
 
     const resubmission = dossier.processingState === ProcessingState.RETURNED;
     const snapshot = await this.snapshot(dossier);
@@ -503,6 +515,64 @@ export class WorkflowService {
         .sort(),
       documentHashes: documents.map((d: { content_hash: string }) => d.content_hash),
     };
+  }
+
+  /**
+   * V0.3.0 — passing a matter on along an approval route.
+   *
+   * The designated reviewer of the current step approves their step and sends
+   * the matter to the reviewer of the next one. In workflow terms this is a new
+   * submission by that reviewer: the matter stays Under review, the next person
+   * becomes the designated reviewer, and the snapshot travels with it, so the
+   * final approval is still bound to exactly what was first submitted. If the
+   * matter changed in between, it is refused, as an approval would be.
+   */
+  async forward(actor: Actor, dossierId: string, nextReviewerAccountId: string, version: number, stepLabel: string) {
+    const { dossier, submission } = await this.loadUnderReview(dossierId, version);
+    if (submission.reviewer?.id !== actor.accountId) {
+      throw new ForbiddenException('You are not permitted to decide on this matter.');
+    }
+    if (dossier.version !== submission.reviewedVersion) {
+      throw new ConflictException('This matter has changed since it was submitted. It must be resubmitted.');
+    }
+    const current = await this.snapshot(dossier);
+    if (JSON.stringify(current.records) !== JSON.stringify(submission.reviewedSnapshot.records)) {
+      throw new ConflictException('The records in this matter have changed since it was submitted. It must be resubmitted.');
+    }
+    if (nextReviewerAccountId === actor.accountId) {
+      throw new BadRequestException('Choose someone else for the next step.');
+    }
+    await this.assertReviewAuthority(nextReviewerAccountId);
+    const next = await this.accounts.findOne({ where: { id: nextReviewerAccountId }, relations: { person: true } });
+    await this.transition(
+      dossier,
+      ProcessingState.UNDER_REVIEW,
+      {
+        eventType: WorkflowEventType.SUBMITTED,
+        actorAccountId: actor.accountId,
+        onBehalfOfAccountId: null,
+        reviewerAccountId: nextReviewerAccountId,
+        reason: `Step approved: ${stepLabel}`,
+        snapshot: submission.reviewedSnapshot,
+        reviewedVersion: dossier.version + 1,
+      },
+      {
+        eventType: AuditEventType.WORKFLOW_SUBMITTED,
+        actorAccountId: actor.accountId,
+        actorDescription: actor.description,
+        subjectDescription: `${dossier.dossierIdentity} — ${dossier.subject}`,
+        previousValue: `step approved: ${stepLabel}`.slice(0, 400),
+        newValue: `under review by ${next?.person.fullName}`,
+        summary: `${actor.description} approved the step "${stepLabel}" of ${dossier.dossierIdentity} and passed it to ${next?.person.fullName}.`.slice(0, 600),
+      },
+    );
+    return this.stateOf(dossierId);
+  }
+
+  /** V0.3.0 — the reviewer the latest submission names, for route handling. */
+  async currentReviewer(dossierId: string): Promise<string | null> {
+    const submission = await this.latestSubmission(dossierId);
+    return submission?.reviewer?.id ?? null;
   }
 
   private async latestSubmission(dossierId: string): Promise<WorkflowEvent | null> {
