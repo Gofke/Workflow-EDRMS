@@ -6,6 +6,7 @@ import { Mailer, PushSender, SmsSender } from './delivery';
 import { NotificationService } from './notification.service';
 import { SealService } from './seal.service';
 import { WorkingDaysService } from './working-days.service';
+import { MalwareScanService } from './malware-scan.service';
 
 /**
  * Services every feature module uses. Global, and free of controllers and
@@ -15,7 +16,7 @@ import { WorkingDaysService } from './working-days.service';
 @Global()
 @Module({
   imports: [AuditModule],
-  providers: [SettingsService, AccessService, WorkingDaysService, Mailer, SmsSender, PushSender, NotificationService, SealService],
-  exports: [AuditModule, SettingsService, AccessService, WorkingDaysService, Mailer, SmsSender, PushSender, NotificationService, SealService],
+  providers: [SettingsService, AccessService, WorkingDaysService, Mailer, SmsSender, PushSender, NotificationService, SealService, MalwareScanService],
+  exports: [AuditModule, SettingsService, AccessService, WorkingDaysService, Mailer, SmsSender, PushSender, NotificationService, SealService, MalwareScanService],
 })
 export class CoreModule {}

@@ -201,6 +201,108 @@ const ENTRIES_SQL = `
           JOIN account sacc ON sacc.id = se.actor_account_id
           JOIN person sp ON sp.id = sacc.person_id
          WHERE se.dossier_id = $1
+
+        UNION ALL
+        -- V0.3.0: actions on the matter (created, completed, cancelled, reassigned)
+        SELECT te.occurred_at,
+               'TASK_' || te.event_type,
+               CASE te.event_type
+                 WHEN 'CREATED'   THEN 'Task ' || t.reference || ' created for ' || ap.full_name
+                 WHEN 'COMPLETED' THEN 'Task ' || t.reference || ' completed'
+                 WHEN 'CANCELLED' THEN 'Task ' || t.reference || ' cancelled'
+                 WHEN 'ASSIGNED'  THEN 'Task ' || t.reference || ' reassigned to ' || coalesce(te.to_value, '')
+                 WHEN 'REJECTED'  THEN 'Task ' || t.reference || ' declined'
+                 ELSE 'Task ' || t.reference || ' ' || lower(te.event_type)
+               END,
+               tp.full_name,
+               obp.full_name,
+               CASE WHEN te.event_type IN ('CREATED') THEN t.title ELSE te.note END,
+               'task_event',
+               te.id::text
+          FROM task_event te
+          JOIN task t ON t.id = te.task_id
+          JOIN account tacc ON tacc.id = te.actor_account_id
+          JOIN person tp ON tp.id = tacc.person_id
+          JOIN account aacc ON aacc.id = t.assignee_account_id
+          JOIN person ap ON ap.id = aacc.person_id
+          LEFT JOIN account obacc ON obacc.id = te.on_behalf_of_account_id
+          LEFT JOIN person obp ON obp.id = obacc.person_id
+         WHERE t.dossier_id = $1 AND te.event_type IN ('CREATED','COMPLETED','CANCELLED','ASSIGNED','REJECTED')
+
+        UNION ALL
+        -- V0.3.0: advice asked and given
+        SELECT ar.requested_at,
+               'ADVICE_REQUESTED',
+               'Advice requested from ' || fp.full_name,
+               rp.full_name,
+               NULL,
+               left(ar.question, 300),
+               'advice_request',
+               ar.id::text
+          FROM advice_request ar
+          JOIN account racc ON racc.id = ar.requested_by_account_id
+          JOIN person rp ON rp.id = racc.person_id
+          JOIN account facc ON facc.id = ar.requested_from_account_id
+          JOIN person fp ON fp.id = facc.person_id
+         WHERE ar.dossier_id = $1
+        UNION ALL
+        SELECT ar.answered_at,
+               'ADVICE_GIVEN',
+               'Advice given by ' || gp.full_name,
+               gp.full_name,
+               NULL,
+               left(ar.answer, 300),
+               'advice_request',
+               ar.id::text || '-answer'
+          FROM advice_request ar
+          JOIN account gacc ON gacc.id = ar.answered_by_account_id
+          JOIN person gp ON gp.id = gacc.person_id
+         WHERE ar.dossier_id = $1 AND ar.status = 'ANSWERED'
+
+        UNION ALL
+        -- V0.3.0: intermediate approvals along a route
+        SELECT rs.occurred_at,
+               'ROUTE_STEP_' || rs.decision,
+               'Step approved: ' || rs.step_label,
+               sp.full_name,
+               NULL,
+               rs.note,
+               'route_step_decision',
+               rs.id::text
+          FROM route_step_decision rs
+          JOIN account sacc ON sacc.id = rs.actor_account_id
+          JOIN person sp ON sp.id = sacc.person_id
+         WHERE rs.dossier_id = $1 AND rs.decision = 'APPROVED'
+
+        UNION ALL
+        -- V0.3.0: classification changes
+        SELECT cc.changed_at,
+               'CLASSIFICATION_CHANGED',
+               'Classification changed from ' || cc.previous_level || ' to ' || cc.new_level,
+               cp.full_name,
+               NULL,
+               cc.reason,
+               'classification_change',
+               cc.id::text
+          FROM classification_change cc
+          JOIN account cacc ON cacc.id = cc.changed_by_account_id
+          JOIN person cp ON cp.id = cacc.person_id
+         WHERE cc.subject_type = 'DOSSIER' AND cc.subject_id = $1
+
+        UNION ALL
+        -- V0.3.0: legal hold set or released
+        SELECT lh.occurred_at,
+               'LEGAL_HOLD_' || lh.action,
+               CASE lh.action WHEN 'SET' THEN 'Legal hold placed' ELSE 'Legal hold released' END,
+               lp.full_name,
+               NULL,
+               lh.reason,
+               'legal_hold_event',
+               lh.id::text
+          FROM legal_hold_event lh
+          JOIN account lacc ON lacc.id = lh.actor_account_id
+          JOIN person lp ON lp.id = lacc.person_id
+         WHERE lh.dossier_id = $1
       ) entries`;
 
 @Injectable()

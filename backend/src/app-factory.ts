@@ -38,7 +38,10 @@ function requireEnv(name: string): string {
  * suite verifies.
  */
 export async function createApp(): Promise<INestApplication> {
-  const app = await NestFactory.create(AppModule, { bodyParser: true, logger: false });
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true,
+    logger: process.env.DEBUG_NEST ? ['error', 'warn'] : false,
+  });
   const isProduction = process.env.NODE_ENV === 'production';
   const idleMinutes = Number(process.env.SESSION_IDLE_MINUTES ?? 30);
 

@@ -13,9 +13,10 @@ import { CoreModule } from './core/core.module';
 import { SettingsModule } from './settings/settings.module';
 import { AccessModule } from './access/access.module';
 import { OrgModule } from './org/org.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })
 export class AppModule {}
