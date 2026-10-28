@@ -19,11 +19,13 @@ import { LettersModule } from './letters/letters.module';
 import { CaseFilesModule } from './casefiles/casefiles.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AiModule } from './ai/ai.module';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { OversightModule } from './oversight/oversight.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, DeadlinesModule, LettersModule, CaseFilesModule, ApprovalsModule, DashboardModule,
-    AiModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
+    AiModule, OversightModule, IntegrationsModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })
 export class AppModule {}

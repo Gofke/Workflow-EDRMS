@@ -1,0 +1,21 @@
+# systemd unit for the JusPol EDRMS API.  Install: /etc/systemd/system/juspol-api.service
+[Unit]
+Description=JusPol EDRMS API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=juspol
+WorkingDirectory=/opt/juspol/backend
+EnvironmentFile=/opt/juspol/backend/.env
+ExecStartPre=/usr/bin/node dist/config/migrate.js
+ExecStart=/usr/bin/node dist/main.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -47,6 +47,18 @@ export async function createApp(): Promise<INestApplication> {
   const idleMinutes = Number(process.env.SESSION_IDLE_MINUTES ?? 30);
 
   app.use(helmet());
+  // Behind the TLS proxy (nginx), trust its X-Forwarded-Proto so the secure
+  // session cookie is issued over HTTPS. Set TRUST_PROXY=1 in production.
+  if (process.env.TRUST_PROXY) {
+    (app.getHttpAdapter().getInstance() as express.Express).set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+  }
+  // WijSamen reports carry their photos inline.
+  // Wrapped in a named function: Nest skips its own JSON parser when it finds
+  // a layer called "jsonParser" already registered.
+  const wijsamenJson = express.json({ limit: process.env.WIJSAMEN_MAX_BYTES ?? '40mb' });
+  app.use('/api/integrations/wijsamen', function wijsamenBody(req: express.Request, res: express.Response, next: express.NextFunction) {
+    wijsamenJson(req, res, next);
+  });
   // The mail gateway delivers a raw RFC 822 message, not JSON.
   app.use('/api/intake/email/gateway', express.raw({ type: () => true, limit: process.env.INTAKE_MAX_BYTES ?? '30mb' }));
   app.enableCors({
