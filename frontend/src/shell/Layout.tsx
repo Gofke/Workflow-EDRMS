@@ -166,7 +166,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {business && <GlobalSearch />}
             <div className="spacer" />
             {business && session.ai('chat') && (
-              <button type="button" className="ask-btn" onClick={() => assistant.setOpen(!assistant.open)} aria-expanded={assistant.open} data-tour="chat">
+              <button type="button" className="ask-btn" onClick={() => assistant.setOpen(!assistant.open)} aria-expanded={assistant.open} aria-label={t('Vraag de assistent', 'Ask the assistant')} data-tour="chat">
                 <Sparkles size={18} aria-hidden="true" />
                 <span className="label">{t('Vraag de assistent', 'Ask the assistant')}</span>
               </button>

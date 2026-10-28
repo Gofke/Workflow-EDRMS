@@ -1,3 +1,4 @@
+import { readableDate } from '../common/actor';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AccessService } from '../access/access.service';
@@ -211,7 +212,7 @@ export class SearchService {
           id: t.id,
           identity: t.reference,
           title: t.title,
-          snippet: `${t.assignee.name}${t.dueDate ? ` · ${t.dueDate}` : ''}`,
+          snippet: `${t.assignee.name}${t.dueDate ? `, termijn ${readableDate(t.dueDate)}` : ''}`,
           date: t.createdAt.slice(0, 10),
           meta: { status: t.status, priority: t.priority, overdue: String(t.overdue) },
           link: `/taken/${t.id}`,

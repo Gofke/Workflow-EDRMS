@@ -84,7 +84,7 @@ export class IntakeService {
     }
     doc.moveDown(0.8);
     doc.font('Body').fontSize(10.5).fillColor('#111827').text((parsed.text ?? '').trim().slice(0, 60_000) || '(geen tekst)');
-    footer(doc, `E-mail ontvangen via ${channel === 'GATEWAY' ? 'de mailserver' : 'upload'} · sha256 ${rawHash.slice(0, 16)}…`);
+    footer(doc, `E-mail ontvangen via ${channel === 'GATEWAY' ? 'de mailserver' : 'upload'}, sha256 ${rawHash.slice(0, 16)}…`);
     const messagePdf = await pdfBuffer(doc);
     const mainDoc = await this.documents.capture(actor, draft.id, {
       originalname: 'E-mailbericht.pdf',

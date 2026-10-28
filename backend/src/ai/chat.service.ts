@@ -279,7 +279,7 @@ export class ChatService {
       return {
         intent: 'ask',
         content: result.answer,
-        cards: result.rows.length ? [{ kind: 'LIST', title: result.understood.join(' · '), rows: result.rows, count: result.count }] : [],
+        cards: result.rows.length ? [{ kind: 'LIST', title: result.understood.join('; '), rows: result.rows, count: result.count }] : [],
         suggestions: [],
       };
     }

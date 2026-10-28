@@ -1,3 +1,4 @@
+import { dutchHeadline } from '../timeline/headline-nl';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import JSZip from 'jszip';
@@ -5,7 +6,7 @@ import { DataSource } from 'typeorm';
 import { AccessService } from '../access/access.service';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
-import { footer, letterhead, newPdf, pdfBuffer, table } from '../core/pdf';
+import { footer, letterhead, newPdf, pdfBuffer, table, surinameDateTime } from '../core/pdf';
 import { canonicalJson, SealService } from '../core/seal.service';
 import { DocumentsService } from '../documents/documents.service';
 import { Actor } from '../records/registration.service';
@@ -322,25 +323,26 @@ export class CaseFilesService {
     letterhead(doc, branding);
     doc.font('Bold').fontSize(16).fillColor(branding.primaryColor).text(`Tijdlijn ${dossier.dossierIdentity}`);
     doc.font('Body').fontSize(11).fillColor('#111827').text(dossier.subject);
-    doc.fontSize(8.5).fillColor('#6b7280').text(`Geëxporteerd door ${actor.description} op ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · ${entries.length} gebeurtenissen · afgeleid uit de registratie, niet afzonderlijk opgeslagen`);
+    doc.fontSize(8.5).fillColor('#6b7280').text(`Geëxporteerd door ${actor.description} op ${surinameDateTime(new Date())}. ${entries.length} ${entries.length === 1 ? "gebeurtenis" : "gebeurtenissen"}, afgeleid uit de registratie en niet afzonderlijk opgeslagen.`);
     doc.moveDown(0.8);
+    const usable = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     table(
       doc,
       [
-        { label: 'Moment', width: 92 },
-        { label: 'Gebeurtenis', width: 200 },
-        { label: 'Door', width: 110 },
-        { label: 'Toelichting', width: 81 },
+        { label: 'Moment', width: usable * 0.17 },
+        { label: 'Gebeurtenis', width: usable * 0.33 },
+        { label: 'Door', width: usable * 0.18 },
+        { label: 'Toelichting', width: usable * 0.32 },
       ],
       entries.map((e) => [
-        e.occurredAt.replace('T', ' ').slice(0, 16),
-        e.headline,
+        surinameDateTime(e.occurredAt),
+        dutchHeadline(e.headline),
         e.onBehalfOfName ? `${e.actorName} (namens ${e.onBehalfOfName})` : e.actorName,
-        (e.detail ?? '').slice(0, 160),
+        dutchHeadline(e.detail ?? '').slice(0, 220),
       ]),
       branding.primaryColor,
     );
-    footer(doc, `${branding.organisationName} · ${dossier.dossierIdentity}`);
+    footer(doc, `${branding.organisationName}, ${dossier.dossierIdentity}`);
     const bytes = await pdfBuffer(doc);
     await this.audit.recordStrict({
       eventType: AuditEventType.TIMELINE_PDF_EXPORTED,

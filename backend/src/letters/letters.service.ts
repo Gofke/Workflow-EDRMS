@@ -330,7 +330,7 @@ export class LettersService {
       doc.restore();
       doc.opacity(1);
     }
-    footer(doc, `${branding.organisationName} · ${item.registration_identity ?? 'concept'} · versie ${latest.version_no}`);
+    footer(doc, `${branding.organisationName}, ${item.registration_identity ?? 'concept'}, versie ${latest.version_no}`);
     const bytes = await pdfBuffer(doc);
     const filename = `${final ? 'Brief' : 'Concept'}-${(item.registration_identity ?? 'concept').replace(/[^\w-]/g, '_')}-v${latest.version_no}.pdf`;
     const captured = await this.documents.capture(actor, itemId, {
@@ -503,7 +503,7 @@ export class LettersService {
         { width: doc.page.width - left - doc.page.margins.right - 125 },
       );
     }
-    footer(doc, `${branding.organisationName} · ${item.registration_identity}`);
+    footer(doc, `${branding.organisationName}, ${item.registration_identity}`);
     const bytes = await pdfBuffer(doc);
     await this.audit.recordStrict({
       eventType: AuditEventType.LABEL_PRINTED,

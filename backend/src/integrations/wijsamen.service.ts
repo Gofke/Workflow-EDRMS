@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
-import { footer, letterhead, newPdf, pdfBuffer } from '../core/pdf';
+import { footer, letterhead, newPdf, pdfBuffer, surinameDateTime } from '../core/pdf';
 import { canonicalJson } from '../core/seal.service';
 import { DocumentsService } from '../documents/documents.service';
 import { RegistrationService } from '../records/registration.service';
@@ -87,7 +87,7 @@ export class WijSamenService {
       ['Melder', reporter || 'anoniem'],
       ['Locatie', report.location ?? '—'],
       ['Datum voorval', report.occurredOn ?? '—'],
-      ['Ontvangen', `${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC via ${client.name}`],
+      ['Ontvangen', `${surinameDateTime(new Date())} via ${client.name}`],
     ];
     for (const [k, v] of rows) {
       const y = doc.y;
@@ -96,7 +96,7 @@ export class WijSamenService {
       doc.moveDown(0.2);
     }
     doc.moveDown(0.8).font('Body').fontSize(10.5).text(report.description.slice(0, 20_000));
-    footer(doc, `WijSamen-melding ${report.reference} · sha256 ${payloadHash.slice(0, 16)}…`);
+    footer(doc, `WijSamen-melding ${report.reference}, sha256 ${payloadHash.slice(0, 16)}…`);
     const pdf = await pdfBuffer(doc);
     await this.documents.capture(actor, draft.id, { originalname: 'Melding WijSamen.pdf', mimetype: 'application/pdf', size: pdf.length, buffer: pdf });
     const skipped: { filename: string; reason: string }[] = [];

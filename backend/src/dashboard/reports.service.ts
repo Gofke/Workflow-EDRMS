@@ -1,8 +1,9 @@
+import { readableDate } from '../common/actor';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
-import { footer, letterhead, newPdf, pdfBuffer, table } from '../core/pdf';
+import { footer, letterhead, newPdf, pdfBuffer, table, surinameDateTime } from '../core/pdf';
 import { Actor } from '../records/registration.service';
 import { SettingsService } from '../settings/settings.service';
 import { DashboardService } from './dashboard.service';
@@ -132,11 +133,11 @@ export class ReportsService {
           {
             title: 'Over termijn',
             columns: [
-              { key: 'dossierIdentity', label: 'Dossier', width: 16 },
-              { key: 'subject', label: 'Onderwerp', width: 46 },
-              { key: 'dueDate', label: 'Termijn', width: 12 },
-              { key: 'workingDaysLate', label: 'Werkdagen te laat', width: 16 },
-              { key: 'responsibleName', label: 'Verantwoordelijk', width: 22 },
+              { key: 'dossierIdentity', label: 'Zaak', width: 20 },
+              { key: 'subject', label: 'Onderwerp', width: 42 },
+              { key: 'dueDate', label: 'Termijn', width: 15 },
+              { key: 'workingDaysLate', label: 'Werkdagen te laat', width: 13 },
+              { key: 'responsibleName', label: 'Verantwoordelijk', width: 20 },
             ],
             rows: o.overdue,
           },
@@ -155,7 +156,7 @@ export class ReportsService {
     for (const sheet of sheets) {
       const ws = wb.addWorksheet(sheet.title);
       ws.addRow([`${branding.organisationName} — ${title}`]).font = { bold: true, size: 13 };
-      ws.addRow([`Gemaakt ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC door ${actor.description}`]).font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
+      ws.addRow([`Gemaakt ${surinameDateTime(new Date())} door ${actor.description}`]).font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
       ws.addRow([]);
       const header = ws.addRow(sheet.columns.map((c) => c.label));
       header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -180,7 +181,7 @@ export class ReportsService {
     const doc = newPdf({ title, size: 'A4' });
     letterhead(doc, branding);
     doc.font('Bold').fontSize(16).fillColor(branding.primaryColor).text(title);
-    doc.font('Body').fontSize(8.5).fillColor('#6b7280').text(`Gemaakt ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC door ${actor.description}`);
+    doc.font('Body').fontSize(8.5).fillColor('#6b7280').text(`Gemaakt ${surinameDateTime(new Date())} door ${actor.description}`);
     doc.moveDown(0.8);
     const usable = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     for (const sheet of sheets) {
@@ -190,12 +191,16 @@ export class ReportsService {
       table(
         doc,
         sheet.columns.map((c) => ({ label: c.label, width: (c.width / total) * usable })),
-        sheet.rows.map((r) => sheet.columns.map((c) => String(r[c.key] ?? '—'))),
+        sheet.rows.map((r) => sheet.columns.map((c) => {
+          const v = r[c.key];
+          // Dates as a person writes them; everything else as is.
+          return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? readableDate(v) : String(v ?? '—');
+        })),
         branding.primaryColor,
       );
       doc.moveDown(0.6);
     }
-    footer(doc, `${branding.organisationName} · ${title}`);
+    footer(doc, `${branding.organisationName}, ${title}`);
     const bytes = await pdfBuffer(doc);
     await this.record(actor, title, 'PDF');
     return { bytes, filename: `${name}-${new Date().toISOString().slice(0, 10)}.pdf` };

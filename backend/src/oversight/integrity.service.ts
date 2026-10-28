@@ -7,7 +7,7 @@ import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
 import { loadDocumentConfig } from '../config/document-config';
 import { SealService } from '../core/seal.service';
-import { footer, letterhead, newPdf, pdfBuffer, qrPng, table } from '../core/pdf';
+import { footer, letterhead, newPdf, pdfBuffer, qrPng, table, surinameDateTime } from '../core/pdf';
 import { Actor } from '../records/registration.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -182,7 +182,7 @@ export class IntegrityService implements OnModuleInit, OnModuleDestroy {
     const doc = newPdf({ title: 'Integriteitsverklaring' });
     letterhead(doc, branding);
     doc.font('Bold').fontSize(17).fillColor(branding.primaryColor).text('Integriteitsverklaring');
-    doc.font('Body').fontSize(9).fillColor('#4b5563').text(`Controle uitgevoerd op ${r.runAt.replace('T', ' ').slice(0, 19)} UTC · rapport ${r.id}`);
+    doc.font('Body').fontSize(9).fillColor('#4b5563').text(`Controle uitgevoerd op ${surinameDateTime(r.runAt)} (Surinaamse tijd). Rapportnummer ${r.id}.`);
     doc.moveDown(0.8);
     doc.font('Bold').fontSize(13).fillColor(r.ok ? '#166534' : '#991b1b').text(r.ok ? 'Uitkomst: alles intact' : 'Uitkomst: afwijkingen gevonden');
     doc.moveDown(0.6);
@@ -217,7 +217,7 @@ export class IntegrityService implements OnModuleInit, OnModuleDestroy {
     doc.font('Body').fontSize(8.5).text(`Zegelnummer ${sealId}`, doc.page.margins.left + 105, y + 22);
     doc.text(url, doc.page.margins.left + 105, y + 36, { lineBreak: false });
     doc.y = y + 100;
-    footer(doc, `${branding.organisationName} · Integriteitsverklaring`);
+    footer(doc, `${branding.organisationName}, integriteitsverklaring`);
     return pdfBuffer(doc);
   }
 }

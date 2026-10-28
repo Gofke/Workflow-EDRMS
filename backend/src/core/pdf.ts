@@ -86,13 +86,18 @@ export function footer(doc: Pdf, text: string): void {
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i += 1) {
     doc.switchToPage(i);
+    // The footer sits inside the bottom margin. Without lifting the margin for a
+    // moment, pdfkit takes the text for an overflow and starts a blank page.
+    const margin = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
     const bottom = doc.page.height - 36;
     doc.font('Body').fontSize(8).fillColor('#6b7280');
-    doc.text(`${text}   ·   ${i + 1} / ${range.count}`, doc.page.margins.left, bottom, {
+    doc.text(`${text}  —  ${i + 1} / ${range.count}`, doc.page.margins.left, bottom, {
       width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
       align: 'center',
       lineBreak: false,
     });
+    doc.page.margins.bottom = margin;
   }
 }
 
@@ -124,4 +129,12 @@ export function table(doc: Pdf, columns: { label: string; width: number }[], row
   draw(columns.map((c) => c.label), true, false);
   rows.forEach((r, i) => draw(r, false, i % 2 === 1));
   doc.moveDown(0.5);
+}
+
+/** "28 oktober 2026, 19:52" in Suriname time, for statements a person reads. */
+export function surinameDateTime(value: string | Date): string {
+  const d = new Date(value);
+  const date = d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Paramaribo' });
+  const time = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Paramaribo' });
+  return `${date}, ${time}`;
 }

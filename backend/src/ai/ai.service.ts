@@ -1,3 +1,4 @@
+import { readableDate } from '../common/actor';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AccessProfile, AccessService, isUuid } from '../access/access.service';
@@ -959,7 +960,7 @@ export class AiService {
         id: t.id,
         identity: t.reference,
         title: t.title,
-        meta: `${t.assignee.name}${t.dueDate ? ` · ${t.dueDate}` : ''}${t.overdue ? ' · te laat' : ''}`,
+        meta: `${t.assignee.name}${t.dueDate ? `, termijn ${readableDate(t.dueDate)}` : ''}${t.overdue ? ', te laat' : ''}`,
         date: t.dueDate,
         link: `/taken/${t.id}`,
       }));
@@ -1047,7 +1048,7 @@ export class AiService {
         id: r.id,
         identity: r.registration_identity,
         title: r.subject,
-        meta: `${r.party ?? '—'} · ${r.state === 'DRAFT' ? 'concept' : r.direction.toLowerCase()}`,
+        meta: `${r.party ?? '—'}, ${r.state === 'DRAFT' ? 'concept' : ({ INCOMING: 'inkomend', OUTGOING: 'uitgaand', INTERNAL: 'intern' } as Record<string, string>)[r.direction] ?? r.direction}`,
         date: r.d,
         link: `/post/${r.id}`,
       })),
@@ -1111,7 +1112,7 @@ export class AiService {
         id: r.id,
         identity: r.dossier_identity,
         title: r.subject,
-        meta: `${STATE_NL[r.processing_state] ?? r.processing_state}${r.responsible ? ` · ${r.responsible}` : ''}`,
+        meta: `${STATE_NL[r.processing_state] ?? r.processing_state}${r.responsible ? `, ${r.responsible}` : ''}`,
         date: r.due,
         link: `/zaken/${r.id}`,
       })),

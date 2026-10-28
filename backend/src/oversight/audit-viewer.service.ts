@@ -1,3 +1,4 @@
+import { surinameDateTime } from '../core/pdf';
 import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { DataSource } from 'typeorm';
@@ -158,7 +159,7 @@ export class AuditViewerService {
     const rows = await this.rows(query, restricted);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Logboek');
-    ws.addRow([`Logboek — export door ${actor.description}, ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`]).font = { bold: true };
+    ws.addRow([`Logboek — export door ${actor.description}, ${surinameDateTime(new Date())} (Surinaamse tijd)`]).font = { bold: true };
     ws.addRow([describe(query)]).font = { italic: true, size: 9 };
     ws.addRow([]);
     const header = ws.addRow(AuditViewerService.COLUMNS.map((c) => c[1]));

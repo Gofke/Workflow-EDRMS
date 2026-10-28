@@ -159,7 +159,7 @@ describe('Phase 3 case files', () => {
     writeFileSync(file, response.body);
     const text = execFileSync('pdftotext', [file, '-']).toString();
     expect(text).toContain(`Tijdlijn ${dossier.dossierIdentity}`);
-    expect(text).toContain('Dossier opened');
+    expect(text).toContain('Zaak geopend'); // the PDF is in Dutch, also for headlines stored in English
     await expectAuditEvent(h.db, 'TIMELINE_PDF_EXPORTED', dossier.dossierIdentity);
   });
 });
