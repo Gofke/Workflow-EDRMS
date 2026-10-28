@@ -945,7 +945,7 @@ export function translateHeadline(text: string, language: string): string {
     [/^Task (\S+) created for (.+)$/, 'Taak $1 aangemaakt voor $2'],
     [/^Task (\S+) completed$/, 'Taak $1 afgerond'],
     [/^Task (\S+) cancelled$/, 'Taak $1 geannuleerd'],
-    [/^Task (\S+) reassigned to (.*)$/, 'Taak $1 overgedragen'],
+    [/^Task (\S+) reassigned to (.*)$/, 'Taak $1 overgedragen aan $2'],
     [/^Task (\S+) declined$/, 'Taak $1 geweigerd'],
     [/^Advice requested from (.+)$/, 'Advies gevraagd aan $1'],
     [/^Advice given by (.+)$/, 'Advies gegeven door $1'],

@@ -458,7 +458,7 @@ export class CaseFilesService {
     );
     const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
     const packageHash = createHash('sha256').update(bytes).digest('hex');
-    const seal = await this.seals.seal('PACKAGE', dossierId, { manifestSha256: createHash('sha256').update(manifestText).digest('hex'), packageSha256: packageHash, dossierIdentity: meta.dossier_identity, files: files.length }, actor.accountId);
+    const seal = await this.seals.seal('PACKAGE', dossierId, { kind: 'ARCHIVE_PACKAGE', issuer: (await this.settings.get('branding')).organisationName, title: `Archiefpakket ${meta.dossier_identity}`, manifestSha256: createHash('sha256').update(manifestText).digest('hex'), packageSha256: packageHash, dossierIdentity: meta.dossier_identity, files: files.length }, actor.accountId);
     await this.dataSource.transaction(async (manager) => {
       await manager.query(
         `INSERT INTO archive_transfer (dossier_id, package_hash, manifest, seal_id, exported_by_account_id) VALUES ($1, $2, $3, $4, $5)`,

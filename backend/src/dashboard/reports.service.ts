@@ -3,7 +3,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
-import { footer, letterhead, newPdf, pdfBuffer, table, surinameDateTime } from '../core/pdf';
+import { footer, letterhead, newPdf, pdfBuffer, qrPng, table, surinameDateTime } from '../core/pdf';
+import { canonicalJson, SealService } from '../core/seal.service';
+import { createHash, randomUUID } from 'crypto';
 import { Actor } from '../records/registration.service';
 import { SettingsService } from '../settings/settings.service';
 import { DashboardService } from './dashboard.service';
@@ -26,6 +28,7 @@ export class ReportsService {
     private readonly dashboard: DashboardService,
     private readonly audit: AuditService,
     private readonly settings: SettingsService,
+    private readonly seals: SealService,
   ) {}
 
   private async sheets(accountId: string, name: ReportName): Promise<{ title: string; sheets: Sheet[] }> {
@@ -200,6 +203,19 @@ export class ReportsService {
       );
       doc.moveDown(0.6);
     }
+    // The figures are sealed: the seal carries a fingerprint of exactly these
+    // rows, so a printed copy can be checked against what the system produced.
+    const contentSha256 = createHash('sha256').update(canonicalJson({ title, sheets: sheets.map((x) => ({ title: x.title, rows: x.rows })) } as Record<string, unknown>)).digest('hex');
+    const seal = await this.seals.seal('PACKAGE', randomUUID(), { kind: 'REPORT', issuer: branding.organisationName, title, contentSha256, createdFor: actor.description, createdAt: new Date().toISOString() }, actor.accountId);
+    const url = `${(process.env.PUBLIC_BASE_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/verifieren/${seal.id}`;
+    if (doc.y > doc.page.height - doc.page.margins.bottom - 110) doc.addPage();
+    doc.moveDown(0.6);
+    const y = doc.y;
+    doc.image(await qrPng(url, 200), doc.page.margins.left, y, { width: 80 });
+    doc.font('Bold').fontSize(9).fillColor('#111827').text('Digitaal zegel', doc.page.margins.left + 95, y + 6);
+    doc.font('Body').fontSize(8.5).fillColor('#374151').text(`Zegelnummer ${seal.id}`, doc.page.margins.left + 95, y + 20);
+    doc.text(`Controleer de echtheid: scan de code of ga naar ${url}`, doc.page.margins.left + 95, y + 33, { width: usable - 95 });
+    doc.y = y + 90;
     footer(doc, `${branding.organisationName}, ${title}`);
     const bytes = await pdfBuffer(doc);
     await this.record(actor, title, 'PDF');

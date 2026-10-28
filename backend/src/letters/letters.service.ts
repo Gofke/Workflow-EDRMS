@@ -409,6 +409,8 @@ export class LettersService {
       valid: result.valid && documentIntact !== false,
       reason: result.reason ?? (documentIntact === false ? 'The stored document no longer matches the sealed fingerprint.' : null),
       issuer: p.issuer,
+      kind: row?.subject_type === 'DOCUMENT' ? 'LETTER' : (p.kind ?? null),
+      title: p.title ?? null,
       registrationIdentity: p.registrationIdentity,
       documentSha256: p.documentSha256,
       approvedBy: p.approvedBy,
@@ -552,7 +554,8 @@ export class LettersService {
          (SELECT max(d.processing_state) FROM dossier_link dl JOIN dossier d ON d.id = dl.dossier_id WHERE dl.correspondence_item_id = $1) AS processing,
          (SELECT bool_or(d.processing_state = 'FINALISED') FROM dossier_link dl JOIN dossier d ON d.id = dl.dossier_id WHERE dl.correspondence_item_id = $1) AS finalised,
          (SELECT max(r.registered_at) FROM correspondence_item r WHERE r.in_reply_to_item_id = $1 AND r.state = 'REGISTERED') AS replied_at,
-         (SELECT max(e.occurred_at) FROM dossier_link dl JOIN workflow_event e ON e.dossier_id = dl.dossier_id WHERE dl.correspondence_item_id = $1) AS last_event`,
+         (SELECT max(e.occurred_at) FROM dossier_link dl JOIN workflow_event e ON e.dossier_id = dl.dossier_id WHERE dl.correspondence_item_id = $1) AS last_event,
+         (SELECT to_char(max(d.due_date), 'YYYY-MM-DD') FROM dossier_link dl JOIN dossier d ON d.id = dl.dossier_id WHERE dl.correspondence_item_id = $1 AND d.state = 'OPEN') AS matter_due`,
       [row.id],
     );
     const status = state.finalised || state.replied_at ? 'COMPLETED' : state.processing ? 'IN_PROGRESS' : 'RECEIVED';
@@ -562,7 +565,8 @@ export class LettersService {
       reference: row.registration_identity,
       status,
       receivedOn: registeredOn,
-      expectedBy: status === 'COMPLETED' ? null : await this.workingDays.addWorkingDays(registeredOn, deadlines.defaultIncomingWorkingDays),
+      // The official deadline of the matter once there is one; before that, the standard handling time.
+      expectedBy: status === 'COMPLETED' ? null : (state.matter_due ?? (await this.workingDays.addWorkingDays(registeredOn, deadlines.defaultIncomingWorkingDays))),
       lastUpdate: new Date(state.replied_at ?? state.last_event ?? row.registered_at).toISOString(),
     };
   }

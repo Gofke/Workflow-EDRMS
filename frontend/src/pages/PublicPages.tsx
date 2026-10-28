@@ -2,7 +2,7 @@ import { Check, FileCheck2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, errorText } from '../lib/api';
-import { dateTime, longDate } from '../lib/format';
+import { dateTime, longDate, today } from '../lib/format';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
 import { ErrorNote, Field, Mark, Panel } from '../ui';
@@ -119,7 +119,14 @@ export function TrackPage() {
             {result.expectedBy && (
               <>
                 <dt>{t('Verwachte afhandeling', 'Expected completion')}</dt>
-                <dd>{t('uiterlijk', 'by')} {longDate(result.expectedBy, language)}</dd>
+                <dd>
+                  {t('uiterlijk', 'by')} {longDate(result.expectedBy, language)}
+                  {result.expectedBy < today() && (
+                    <span className="small muted" style={{ display: 'block', fontWeight: 400 }}>
+                      {t('Deze datum is verstreken; uw brief is nog in behandeling.', 'This date has passed; your letter is still being handled.')}
+                    </span>
+                  )}
+                </dd>
               </>
             )}
             <dt>{t('Laatst bijgewerkt', 'Last updated')}</dt>
@@ -135,6 +142,8 @@ interface SealResult {
   valid: boolean;
   reason: string | null;
   issuer: string | null;
+  kind: string | null;
+  title: string | null;
   registrationIdentity: string | null;
   documentSha256: string | null;
   approvedBy: string | null;
@@ -190,7 +199,11 @@ export function VerifyPage() {
             {result.valid ? <ShieldCheck size={40} color="var(--ok)" /> : <ShieldAlert size={40} color="var(--danger)" />}
             <div>
               <h2 style={{ fontSize: 'var(--text-xl)' }}>{result.valid ? t('Echt en ongewijzigd', 'Genuine and unchanged') : t('Niet geldig', 'Not valid')}</h2>
-              <p>{result.valid ? t('Dit document is uitgegeven door het ministerie en sindsdien niet gewijzigd.', 'This document was issued by the ministry and has not been changed since.') : result.reason}</p>
+              <p>{result.valid
+                  ? result.kind === 'LETTER' || !result.kind
+                    ? t('Dit document is uitgegeven door het ministerie en sindsdien niet gewijzigd.', 'This document was issued by the ministry and has not been changed since.')
+                    : t('Dit stuk is door het systeem van het ministerie gemaakt en gezegeld. Vergelijk de gegevens hieronder met uw exemplaar.', 'This document was produced and sealed by the ministry’s system. Compare the details below with your copy.')
+                  : result.reason}</p>
             </div>
           </div>
           <dl className="kv" style={{ marginTop: 16 }}>
@@ -198,6 +211,15 @@ export function VerifyPage() {
               <>
                 <dt>{t('Uitgegeven door', 'Issued by')}</dt>
                 <dd>{result.issuer}</dd>
+              </>
+            )}
+            {result.kind && (
+              <>
+                <dt>{t('Soort stuk', 'Kind of document')}</dt>
+                <dd>
+                  {({ LETTER: t('Brief', 'Letter'), REPORT: t('Rapport', 'Report'), INTEGRITY_REPORT: t('Integriteitsverklaring', 'Integrity statement'), ARCHIVE_PACKAGE: t('Archiefpakket', 'Archive package') } as Record<string, string>)[result.kind] ?? result.kind}
+                  {result.title && result.kind !== 'LETTER' ? `: ${result.title}` : ''}
+                </dd>
               </>
             )}
             {result.registrationIdentity && (
@@ -219,7 +241,7 @@ export function VerifyPage() {
             {result.documentSha256 && (
               <>
                 <dt>{t('Vingerafdruk', 'Fingerprint')}</dt>
-                <dd className="xs" style={{ fontWeight: 400 }}>
+                <dd className="xs" style={{ fontWeight: 400, wordBreak: 'break-all' }}>
                   SHA-256 {result.documentSha256}
                 </dd>
               </>

@@ -178,7 +178,7 @@ export class IntegrityService implements OnModuleInit, OnModuleDestroy {
   async pdf(actor: Actor, id: string): Promise<Buffer> {
     const r = await this.report(id);
     const branding = await this.settings.get('branding');
-    const sealId = r.sealId ?? (await this.seals.seal('PACKAGE', r.id, { kind: 'INTEGRITY_REPORT', report: r as unknown as Record<string, unknown> }, actor.accountId)).id;
+    const sealId = r.sealId ?? (await this.seals.seal('PACKAGE', r.id, { kind: 'INTEGRITY_REPORT', issuer: branding.organisationName, title: 'Integriteitsverklaring', report: r as unknown as Record<string, unknown> }, actor.accountId)).id;
     const doc = newPdf({ title: 'Integriteitsverklaring' });
     letterhead(doc, branding);
     doc.font('Bold').fontSize(17).fillColor(branding.primaryColor).text('Integriteitsverklaring');

@@ -1,3 +1,5 @@
+import { execFileSync } from 'child_process';
+import request from 'supertest';
 import ExcelJS from 'exceljs';
 import { Harness, accountIdFor, expectAuditEvent, signIn, startHarness } from './harness';
 
@@ -153,6 +155,12 @@ describe('Phase 3 search and dashboards', () => {
     expect(values).toContain(`'=HYPERLINK("http://evil")`);
     const pdf = await minister.get('/api/reports/departments.pdf').buffer(true).parse(binary as never).expect(200);
     expect(pdf.body.slice(0, 4).toString()).toBe('%PDF');
+    // The PDF is sealed: its seal is public, valid, and says what it is.
+    const [seal] = await h.db.query(`SELECT id FROM document_seal WHERE payload::jsonb->>'kind' = 'REPORT' ORDER BY sealed_at DESC LIMIT 1`);
+    expect(seal).toBeDefined();
+    const check = (await request(h.app.getHttpServer()).get(`/api/public/seals/${seal.id}`).expect(200)).body;
+    expect(check).toMatchObject({ valid: true, kind: 'REPORT', title: 'Prestaties per afdeling (laatste 90 dagen)' });
+    expect(execFileSync('pdftotext', ['-', '-'], { input: pdf.body }).toString()).toContain(`Zegelnummer ${seal.id}`);
     await minister.get('/api/reports/nonsense.pdf').expect(400);
     await expectAuditEvent(h.db, 'REPORT_EXPORTED', 'Trends');
     const { agent: clerk } = await signIn(h.app, 'assistant1@juspol.test');

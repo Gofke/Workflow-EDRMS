@@ -96,8 +96,33 @@ class Clock {
     this.dates = [];
     await work();
     const [{ t1 }] = await this.db.query(`SELECT clock_timestamp() + interval '1 second' AS t1`);
-    if (daysAgo === 0) return;
-    const shift = `make_interval(days => ${Math.round(daysAgo)})`;
+    const days = Math.round(daysAgo);
+    // The batch ran in a few seconds; its moments are spread over that day's
+    // office hours (from 08:10 Suriname time), in the order they happened, so
+    // the history reads like a working day. Today's batch only up to now.
+    const [{ span }] = await this.db.query(
+      `SELECT CASE WHEN $1::int > 0 THEN 25200
+                   ELSE least(25200, extract(epoch FROM (now() AT TIME ZONE 'America/Paramaribo') - (date_trunc('day', now() AT TIME ZONE 'America/Paramaribo') + interval '8 hours 10 minutes')) - 900) END AS span`,
+      [days],
+    );
+    if (days === 0 && Number(span) <= 600) return;
+    // The first and last moment actually written in the batch bound the spread.
+    let first: Date | null = null;
+    let last: Date | null = null;
+    for (const { table, columns } of this.columns) {
+      for (const c of columns) {
+        const [r] = await this.db.query(`SELECT min("${c}") AS a, max("${c}") AS b FROM "${table}" WHERE "${c}" >= $1 AND "${c}" <= $2`, [t0, t1]);
+        if (r?.a && (!first || r.a < first)) first = r.a;
+        if (r?.b && (!last || r.b > last)) last = r.b;
+      }
+    }
+    if (!first || !last) return;
+    const lo = first.toISOString();
+    const width = Math.max((last.getTime() - first.getTime()) / 1000, 0.001);
+    const moved = (c: string) =>
+      `((date_trunc('day', ('${lo}'::timestamptz - make_interval(days => ${days})) AT TIME ZONE 'America/Paramaribo') + interval '8 hours 10 minutes'
+         + (extract(epoch FROM ("${c}" - '${lo}'::timestamptz)) / ${width}) * make_interval(secs => ${Number(span)}))
+        AT TIME ZONE 'America/Paramaribo')`;
     // Only what was written during the batch: a value set in the future (an
     // end date) is moved explicitly, through later(), never by this sweep.
     for (const { table, columns } of this.columns) {
@@ -106,13 +131,15 @@ class Clock {
       if (!hit) continue;
       await this.unguarded(table, () =>
         this.db.query(
-          `UPDATE "${table}" SET ${columns.map((c) => `"${c}" = CASE WHEN "${c}" >= $1 AND "${c}" <= $2 THEN "${c}" - ${shift} ELSE "${c}" END`).join(', ')} WHERE ${where}`,
+          `UPDATE "${table}" SET ${columns.map((c) => `"${c}" = CASE WHEN "${c}" >= $1 AND "${c}" <= $2 THEN ${moved(c)} ELSE "${c}" END`).join(', ')} WHERE ${where}`,
           [t0, t1],
         ),
       );
     }
+    if (days === 0) return;
+    const shift = `make_interval(days => ${days})`;
     for (const d of this.dates) {
-      const by = d.timestamp ? shift : String(Math.round(daysAgo));
+      const by = d.timestamp ? shift : String(days);
       await this.unguarded(d.table, () => this.db.query(`UPDATE "${d.table}" SET "${d.column}" = "${d.column}" - ${by} WHERE id = $1`, [d.id]));
     }
   }
