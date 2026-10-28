@@ -64,6 +64,9 @@ describe('Phase 3 assistant engine', () => {
     expect(topicsIn('Verzoek om een verblijfsvergunning voor mijn echtgenote')[0].topic.code).toBe('IMMIGRATION');
     expect(topicsIn('Factuur voor de levering van printers, betaling binnen 30 dagen')[0].topic.code).toBe('FINANCE');
     expect(topicsIn('Overplaatsing van een gedetineerde naar Santo Boma')[0].topic.code).toBe('DETENTION');
+    // Dutch compounds count, and "Geachte Minister" alone says nothing about the subject.
+    const police = topicsIn('Geachte Minister, wij verzoeken een overzicht van de verleende vuurwapenvergunningen.');
+    expect(police.map((p) => p.topic.code)).toEqual(['POLICE']);
   });
 
   it('summarises with sentences that are really in the text, without repeats', () => {
@@ -87,6 +90,13 @@ describe('Phase 3 assistant engine', () => {
     expect(p[0]).toMatchObject({ title: 'Brief aan OM opstellen', dueDate: '2026-11-05', assignee: { accountId: 'a' } });
     expect(p[1]).toMatchObject({ assignee: { accountId: 'm' }, dueDate: '2026-10-29' });
     expect(p[2]).toMatchObject({ assignee: { accountId: 'b' }, priority: 'URGENT' });
+    // A sentence keeps its subject: "Sardjoe stuurt…" is not cut to "tuurt…".
+    const kept = proposeActions('- Sardjoe stuurt de begroting naar de Directeur', people, me, today);
+    expect(kept[0].title).toBe('Sardjoe stuurt de begroting naar de Directeur');
+    // Agenda headings are not actions; "Ik bel…" becomes "Bel…"; the deadline leaves the title.
+    const agenda = proposeActions('1. Begroting 2027\n- Sardjoe stelt binnen 5 werkdagen de nota op\n2. Rondvraag\n- Ik bel de Korpschef\nAfsluiting:', people, me, today);
+    expect(agenda.map((a) => a.title)).toEqual(['Sardjoe stelt de nota op', 'Bel de Korpschef']);
+    expect(agenda[0].assignee?.accountId).toBe('a');
   });
 
   it('understands plain-language questions', () => {

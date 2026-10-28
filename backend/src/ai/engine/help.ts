@@ -94,7 +94,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'out-of-office',
-    link: '/profiel',
+    link: '/profiel?tab=afwezigheid',
     keywords: 'afwezig vakantie ziek vervanging vervanger waarnemer out of office leave holiday stand-in substitute',
     nl: {
       title: 'Afwezigheid en vervanging instellen',
@@ -146,7 +146,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'notifications',
-    link: '/profiel',
+    link: '/profiel?tab=meldingen',
     keywords: 'melding meldingen e-mail sms push herinnering dagelijks overzicht notification email reminder digest',
     nl: {
       title: 'Meldingen en herinneringen',
@@ -159,7 +159,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'mfa',
-    link: '/profiel',
+    link: '/profiel?tab=beveiliging',
     keywords: 'tweestapsverificatie authenticator code beveiliging wachtwoord inloggen mfa two-factor security password login',
     nl: {
       title: 'Tweestapsverificatie instellen',
@@ -237,7 +237,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'audit',
-    link: '/audit',
+    link: '/logboek',
     keywords: 'logboek audit wie heeft wat gedaan geschiedenis integriteit controle log history integrity check',
     nl: {
       title: 'Logboek en integriteitscontrole',
@@ -263,7 +263,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'meeting-notes',
-    link: '/assistent',
+    link: '/assistent?tab=notulen',
     keywords: 'notulen vergadering actiepunten verslag meeting notes minutes action items',
     nl: {
       title: 'Actiepunten uit notulen',
@@ -302,7 +302,7 @@ export const HELP: HelpArticle[] = [
   },
   {
     id: 'holidays',
-    link: '/beheer',
+    link: '/beheer?tab=feestdagen',
     keywords: 'feestdag feestdagen werkdagen kalender suriname divali phagwah holiday working days calendar',
     nl: {
       title: 'Werkdagen en feestdagen',

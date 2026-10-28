@@ -23,6 +23,7 @@ import { TasksModule } from '../tasks/tasks.module';
 import { AiService } from './ai.service';
 import { ChatService } from './chat.service';
 import { probe } from './llm';
+import { HELP, searchHelp } from './engine/help';
 
 class LanguageDto {
   @IsOptional() @IsIn(['nl', 'en']) language?: 'nl' | 'en';
@@ -108,6 +109,15 @@ export class AiController {
   @RequireRoles('SYS_ADMIN')
   async modelCheck() {
     return probe(await this.ai.config());
+  }
+
+  /** The help articles the chatbot answers from, for the Help page. Not a switchable AI feature. */
+  @Get('help')
+  @RequireRoles(...BUSINESS_ROLES, 'SYS_ADMIN', 'AUDITOR')
+  help(@Query('q') q?: string) {
+    const strip = (a: (typeof HELP)[number]) => ({ id: a.id, link: a.link, nl: a.nl, en: a.en });
+    if (q?.trim()) return searchHelp(q.slice(0, 300), 8).map((r) => ({ ...strip(r.article), score: r.score }));
+    return HELP.map(strip);
   }
 
   @Post('items/:id/intake')

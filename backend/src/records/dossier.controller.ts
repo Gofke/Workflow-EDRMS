@@ -139,6 +139,15 @@ export class DossierController {
     return this.responsibility.assignableOfficials();
   }
 
+  /** One matter. The record-access guard has already refused anyone who may not see it. */
+  @Get(':id([0-9a-fA-F-]{36})')
+  @RequireRoles(...REGISTRARS)
+  async one(@Param('id') id: string, @Req() request: Request): Promise<DossierView> {
+    const view = await this.dossiers.find(id);
+    await this.dossiers.recordOpened(request.authenticatedUser!.accountId, view);
+    return view;
+  }
+
   @Get(':id/history')
   @RequireRoles(...REGISTRARS)
   history(@Param('id') id: string) {

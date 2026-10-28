@@ -77,12 +77,14 @@ function subjectOf(text: string, language: 'nl' | 'en'): Proposal<string> | null
 }
 
 function tidySubject(s: string): string {
-  return s
-    .replace(/^(re|fw|fwd|antw|doorst)\s*:\s*/gi, '')
-    .replace(/\s+/g, ' ')
-    .replace(/[.;:,\s]+$/, '')
-    .trim()
-    .slice(0, 160);
+  return capitalise(
+    s
+      .replace(/^(re|fw|fwd|antw|doorst)\s*:\s*/gi, '')
+      .replace(/\s+/g, ' ')
+      .replace(/[.;:,\s]+$/, '')
+      .trim()
+      .slice(0, 160),
+  );
 }
 
 function capitalise(s: string): string {
@@ -127,7 +129,7 @@ export function extractIntake(text: string, reference: string): IntakeProposals 
     deadlines,
     classification: classificationOf(text),
     requests: sentences(text)
-      .filter((s) => REQUEST.test(s))
+      .filter((s) => REQUEST.test(s) && !SUBJECT_LABEL.test(s))
       .slice(0, 5)
       .map((s) => excerpt(s, 300)),
     wordCount: text.split(/\s+/).filter(Boolean).length,

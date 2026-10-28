@@ -180,6 +180,10 @@ export class DossierService {
   }
 
   /** One dossier, as returned after a change. */
+  async recordOpened(accountId: string, view: DossierView): Promise<void> {
+    await this.access.recordView(accountId, 'DOSSIER', view.id, `${view.dossierIdentity} — ${view.subject}`);
+  }
+
   find(id: string): Promise<DossierView> {
     return this.load(id);
   }

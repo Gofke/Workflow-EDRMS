@@ -33,8 +33,10 @@ export class RecordsController {
 
   @Get(':id')
   @RequireRoles(...REGISTRARS)
-  one(@Param('id') id: string): Promise<ItemView> {
-    return this.registration.findOne(id);
+  async one(@Param('id') id: string, @Req() request: Request): Promise<ItemView> {
+    const view = await this.registration.findOne(id);
+    await this.access.recordView(request.authenticatedUser!.accountId, 'ITEM', view.id, `${view.registrationIdentity ?? 'concept'} — ${view.subject}`);
+    return view;
   }
 
   /**

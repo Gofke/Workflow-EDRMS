@@ -66,7 +66,7 @@ export const TOPICS: Topic[] = [
     code: 'CABINET',
     nl: 'Kabinet en bestuurszaken',
     en: 'Cabinet and governance',
-    words: ['minister', 'kabinet', 'audiëntie', 'uitnodiging', 'bezoek', 'ceremonie', 'parlement', 'de nationale assemblee', 'dna', 'kamervragen', 'persbericht', 'media', 'protocol', 'invitation', 'audience', 'visit', 'parliament', 'national assembly', 'press', 'speech', 'toespraak', 'raad van ministers'],
+    words: ['kabinet', 'ministerraad', 'audiëntie', 'uitnodiging', 'bezoek', 'ceremonie', 'parlement', 'de nationale assemblee', 'dna', 'kamervragen', 'persbericht', 'media', 'protocol', 'invitation', 'audience', 'visit', 'parliament', 'national assembly', 'press', 'speech', 'toespraak', 'raad van ministers'],
     unitHints: ['kabinet', 'cabinet', 'bestuurszaken', 'minister', 'secretariaat'],
   },
 ];
@@ -75,7 +75,9 @@ export function topicsIn(text: string): { topic: Topic; hits: string[] }[] {
   const lower = ` ${text.toLowerCase()} `;
   const out: { topic: Topic; hits: string[] }[] = [];
   for (const topic of TOPICS) {
-    const hits = topic.words.filter((w) => new RegExp(`[^a-zà-ÿ]${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^a-zà-ÿ]`, 'i').test(lower));
+    // Dutch joins words: "vuurwapenvergunningen" holds "vuurwapen". Longer words
+    // may therefore start a compound; short ones must stand alone.
+    const hits = topic.words.filter((w) => new RegExp(`[^a-zà-ÿ]${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${w.length >= 6 ? '' : '[^a-zà-ÿ]'}`, 'i').test(lower));
     if (hits.length) out.push({ topic, hits });
   }
   return out.sort((a, b) => b.hits.length - a.hits.length);

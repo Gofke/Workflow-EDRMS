@@ -1,0 +1,144 @@
+/*
+ * JusPol — design tokens.
+ *
+ * One typeface, Atkinson Hyperlegible Next, drawn for readers with low vision:
+ * this system is read all day by civil servants of every age, on every kind of
+ * screen. Colour comes from the ministry: the navy of its letterhead and the
+ * gold of the star. Status colours are reserved for status.
+ *
+ * Three themes — light, dark and high contrast — and a larger text size, all
+ * chosen by the person and remembered on their device.
+ */
+@import '@fontsource-variable/atkinson-hyperlegible-next/index.css';
+
+:root {
+  --font: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --text-xs: 0.8rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5625rem;
+  --text-2xl: 1.953rem;
+  --text-3xl: 2.441rem;
+
+  --brand: #15325b;
+  --brand-strong: #0d2240;
+  --brand-soft: #e6ecf5;
+  --gold: #c9a227;
+  --gold-soft: #f6efd6;
+
+  --paper: #f2f4f7;
+  --surface: #ffffff;
+  --surface-sunk: #f7f8fa;
+  --line: #d4dbe4;
+  --line-strong: #aeb9c7;
+  --text: #13213a;
+  --muted: #56657a;
+  --faint: #7c8a9c;
+
+  --ok: #1d7444;
+  --ok-soft: #e3f3e9;
+  --warn: #9a5800;
+  --warn-soft: #fbf0dc;
+  --danger: #b0261d;
+  --danger-soft: #fbe7e5;
+  --info: #1d58c4;
+  --info-soft: #e5eefc;
+  --assist: #0b7268;
+  --assist-soft: #e2f4f1;
+
+  --rail: #15325b;
+  --rail-text: #dbe4f1;
+  --rail-muted: #9fb2cc;
+  --rail-active: #0d2240;
+
+  --focus: #1d58c4;
+  --shadow-pop: 0 12px 32px rgba(13, 34, 64, 0.18), 0 2px 6px rgba(13, 34, 64, 0.08);
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --brand: #8fb4ef;
+  --brand-strong: #b9d0f5;
+  --brand-soft: #1b2c4a;
+  --gold: #e3c35a;
+  --gold-soft: #3a3115;
+  --paper: #0c1525;
+  --surface: #131f35;
+  --surface-sunk: #0f1a2d;
+  --line: #2a3b58;
+  --line-strong: #41557a;
+  --text: #e9eef6;
+  --muted: #a8b6ca;
+  --faint: #8494ab;
+  --ok: #5fd08f;
+  --ok-soft: #12321f;
+  --warn: #f0b45a;
+  --warn-soft: #3a2a10;
+  --danger: #ff8a80;
+  --danger-soft: #3d1715;
+  --info: #8fb4ef;
+  --info-soft: #182b4b;
+  --assist: #5fd3c4;
+  --assist-soft: #0f302c;
+  --rail: #0a1322;
+  --rail-text: #dbe4f1;
+  --rail-muted: #8b9cb6;
+  --rail-active: #1a2a46;
+  --focus: #e3c35a;
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* High contrast: black ground, white lines and text, yellow for focus and action. */
+:root[data-theme='contrast'] {
+  --brand: #ffffff;
+  --brand-strong: #ffffff;
+  --brand-soft: #000000;
+  --gold: #ffd400;
+  --gold-soft: #000000;
+  --paper: #000000;
+  --surface: #000000;
+  --surface-sunk: #000000;
+  --line: #ffffff;
+  --line-strong: #ffffff;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --faint: #e6e6e6;
+  --ok: #6dff9b;
+  --ok-soft: #000000;
+  --warn: #ffd400;
+  --warn-soft: #000000;
+  --danger: #ff7b7b;
+  --danger-soft: #000000;
+  --info: #7fd4ff;
+  --info-soft: #000000;
+  --assist: #6ef3e1;
+  --assist-soft: #000000;
+  --rail: #000000;
+  --rail-text: #ffffff;
+  --rail-muted: #ffffff;
+  --rail-active: #000000;
+  --focus: #ffd400;
+  --shadow-pop: none;
+  color-scheme: dark;
+}
+
+:root[data-text='large'] {
+  font-size: 118.75%;
+}
+:root[data-text='larger'] {
+  font-size: 137.5%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

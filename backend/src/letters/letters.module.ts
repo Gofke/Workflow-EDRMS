@@ -107,6 +107,13 @@ export class LettersController {
     return this.letters.versions(id);
   }
 
+  /** Where this letter stands: its matters, the letter it answers, the replies to it. */
+  @Get(':id/context')
+  @RequireRoles(...REGISTRARS)
+  context(@Param('id') id: string, @Req() request: Request) {
+    return this.letters.context(request.authenticatedUser!.accountId, id);
+  }
+
   @Post(':id/draft-versions')
   @RequireRoles(...REGISTRARS)
   @HttpCode(201)

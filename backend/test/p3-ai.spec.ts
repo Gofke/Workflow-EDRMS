@@ -1,3 +1,4 @@
+import request from 'supertest';
 import http from 'http';
 import { AddressInfo } from 'net';
 import { Harness, accountIdFor, expectAuditEvent, signIn, startHarness } from './harness';
@@ -400,5 +401,15 @@ describe('Phase 3 assistant (AI)', () => {
     await h.db.query(`DELETE FROM ai_feedback`);
     expect((await h.db.query(`SELECT count(*)::int AS n FROM ai_interaction WHERE prompt_summary = 'x'`))[0].n).toBe(0);
     expect((await h.db.query(`SELECT count(*)::int AS n FROM ai_feedback`))[0].n).toBeGreaterThan(0);
+  });
+
+  it('serves the help articles the chatbot answers from, searchable in plain words, to every signed-in role', async () => {
+    const clerk = (await signIn(h.app, 'assistant1@juspol.test')).agent;
+    const all = (await clerk.get('/api/ai/help').expect(200)).body as { id: string; link: string; nl: { title: string } }[];
+    expect(all.length).toBeGreaterThan(15);
+    expect(all.every((a) => a.link.startsWith('/') && a.nl.title)).toBe(true);
+    const hits = (await admin.get('/api/ai/help').query({ q: 'Waar stel ik mijn vervanger in als ik op vakantie ben?' }).expect(200)).body;
+    expect(hits[0]).toMatchObject({ id: 'out-of-office', link: '/profiel?tab=afwezigheid' });
+    await request(h.app.getHttpServer()).get('/api/ai/help').expect(401);
   });
 });

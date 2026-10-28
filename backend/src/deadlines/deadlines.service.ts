@@ -234,8 +234,8 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
     );
     return [
       ...tasks.map((t: Record<string, string>) => ({ type: 'TASK' as const, id: t.id, label: t.label, due: t.due, holder: t.holder, holderName: t.holder_name, owner: t.owner, unitHead: null, link: `/taken/${t.id}` })),
-      ...dossiers.map((d: Record<string, string>) => ({ type: 'DOSSIER' as const, id: d.id, label: d.label, due: d.due, holder: d.holder, holderName: d.holder_name, owner: null, unitHead: d.unit_head, link: `/dossiers/${d.id}` })),
-      ...advice.map((a: Record<string, string>) => ({ type: 'ADVICE' as const, id: a.id, label: a.label, due: a.due, holder: a.holder, holderName: a.holder_name, owner: a.owner, unitHead: null, link: `/dossiers/${a.dossier_id}` })),
+      ...dossiers.map((d: Record<string, string>) => ({ type: 'DOSSIER' as const, id: d.id, label: d.label, due: d.due, holder: d.holder, holderName: d.holder_name, owner: null, unitHead: d.unit_head, link: `/zaken/${d.id}` })),
+      ...advice.map((a: Record<string, string>) => ({ type: 'ADVICE' as const, id: a.id, label: a.label, due: a.due, holder: a.holder, holderName: a.holder_name, owner: a.owner, unitHead: null, link: `/zaken/${a.dossier_id}` })),
     ];
   }
 

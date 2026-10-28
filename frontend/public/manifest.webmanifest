@@ -1,0 +1,23 @@
+{
+  "name": "JusPol EDRMS — Ministerie van Justitie en Politie",
+  "short_name": "JusPol",
+  "description": "Post, zaken, taken en archief van het Ministerie van Justitie en Politie.",
+  "lang": "nl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d2240",
+  "theme_color": "#15325b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Mijn werk", "url": "/" },
+    { "name": "Post", "url": "/post" },
+    { "name": "Taken", "url": "/taken" }
+  ]
+}

@@ -196,7 +196,7 @@ export class SearchService {
           snippet: r.category,
           date: r.d,
           meta: { state: r.state, processingState: r.processing_state, classification: r.classification, due: r.due },
-          link: `/dossiers/${r.id}`,
+          link: `/zaken/${r.id}`,
           rank: Number(r.rank),
         });
       }

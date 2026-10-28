@@ -278,7 +278,7 @@ export class TaskTemplatesController {
   constructor(private readonly templates: TemplatesService) {}
 
   @Get()
-  @RequireRoles(...BUSINESS_ROLES)
+  @RequireRoles(...BUSINESS_ROLES, 'SYS_ADMIN')
   list(@Query('all') all?: string) {
     return this.templates.list(all === 'true');
   }

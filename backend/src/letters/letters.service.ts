@@ -173,6 +173,37 @@ export class LettersService {
   }
 
   /** Starts a reply: a new outgoing draft, linked to the letter it answers. */
+  async context(accountId: string, itemId: string) {
+    const profile = await this.access.assertItem(accountId, itemId);
+    const dp = this.access.dossierPredicate(profile, 'd', 2);
+    const ip = this.access.itemPredicate(profile, 'r', 2);
+    const [dossiers, replies, [original], [counts]] = await Promise.all([
+      this.dataSource.query(
+        `SELECT d.id, d.dossier_identity AS "dossierIdentity", d.subject, d.processing_state AS "processingState", d.state,
+                to_char(d.due_date, 'YYYY-MM-DD') AS "dueDate"
+           FROM dossier_link dl JOIN dossier d ON d.id = dl.dossier_id
+          WHERE dl.correspondence_item_id = $1 AND ${dp.sql}`,
+        [itemId, ...dp.params],
+      ),
+      this.dataSource.query(
+        `SELECT r.id, r.registration_identity AS "registrationIdentity", r.subject, r.state, r.created_at AS "createdAt"
+           FROM correspondence_item r WHERE r.in_reply_to_item_id = $1 AND ${ip.sql} ORDER BY r.created_at`,
+        [itemId, ...ip.params],
+      ),
+      this.dataSource.query(
+        `SELECT o.id, o.registration_identity AS "registrationIdentity", o.subject
+           FROM correspondence_item ci JOIN correspondence_item o ON o.id = ci.in_reply_to_item_id WHERE ci.id = $1`,
+        [itemId],
+      ),
+      this.dataSource.query(
+        `SELECT (SELECT count(*)::int FROM task WHERE correspondence_item_id = $1 AND archived_at IS NULL) AS tasks,
+                (SELECT count(*)::int FROM item_draft_version WHERE item_id = $1) AS versions`,
+        [itemId],
+      ),
+    ]);
+    return { dossiers, replies, inReplyTo: original ?? null, tasks: counts.tasks, versions: counts.versions };
+  }
+
   async startReply(actor: Actor, itemId: string, templateId?: string) {
     const [original] = await this.dataSource.query(
       `SELECT id, subject, party, registration_identity, sender_reference, document_date::text AS document_date, state, classification

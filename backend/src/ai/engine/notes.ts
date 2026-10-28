@@ -58,10 +58,12 @@ function titleOf(line: string, assigneeText: string | null): string {
     .replace(/^(actie|actiepunt|ap|todo|to do|action|action item)\s*[:\-–]\s*/i, '')
     .replace(/^(actie|actiepunt|action)\s+(?=[A-Z@])/i, '')
     .replace(/\b(uiterlijk|vóór|voor|before|by|no later than)\s+(\d{1,2}\s+\w+(\s+\d{4})?|\d{1,2}[-/.]\d{1,2}([-/.]\d{2,4})?|maandag|dinsdag|woensdag|donderdag|vrijdag|monday|tuesday|wednesday|thursday|friday|morgen|tomorrow)\b/gi, '')
+    .replace(/\b(binnen|within)\s+(\d+|een|één|twee|drie|vier|vijf|zes|zeven|acht|negen|tien|one|two|three|four|five|six|seven|eight|nine|ten)\s+(werkdagen|werkdag|dagen|dag|weken|week|working days?|business days?|days?|weeks?)\b/gi, '')
     .replace(/\b(volgende week|next week|deze week|this week|morgen|overmorgen|tomorrow|vandaag|today|z\.s\.m\.|zsm|asap|spoed|urgent)\b/gi, '')
     .replace(/\(\s*\)/g, '');
   // "Sardjoe: …" and "@Sardjoe …" lose the name; "Sardjoe belt …" keeps it, it reads as a sentence.
-  if (assigneeText) t = t.replace(new RegExp(`^\\s*(@${escape(assigneeText)}\\s*[:\-–]?|${escape(assigneeText)}\\s*[:\-–])\\s*`, 'i'), '');
+  if (assigneeText === 'ik') t = t.replace(/^\s*(ik|i)\s+(zal\s+|will\s+)?/i, '');
+  else if (assigneeText) t = t.replace(new RegExp(`^\\s*(@${escape(assigneeText)}\\s*[:–-]?|${escape(assigneeText)}\\s*[:–-])\\s*`, 'i'), '');
   t = t
     .replace(/^(zal|will|moet|gaat|is to|needs to|must)\s+/i, '')
     .replace(/\s+/g, ' ')
@@ -70,12 +72,20 @@ function titleOf(line: string, assigneeText: string | null): string {
   return (t.charAt(0).toUpperCase() + t.slice(1)).slice(0, 200);
 }
 
+const BULLET = /^\s*[-*•–]\s*/;
+const NUMBERED = /^\s*\d+[.)]\s*/;
+
 export function proposeActions(notes: string, people: Person[], me: Person, today: string): ActionProposal[] {
   const out: ActionProposal[] = [];
-  notes.split('\n').forEach((raw, index) => {
+  const lines = notes.split('\n');
+  lines.forEach((raw, index) => {
     const line = raw.trim();
     if (line.length < 8 || NOT_ACTION.test(line) || !ACTION_LINE.test(raw)) return;
     const { person, text } = findPerson(line, people, me);
+    // An agenda heading ("2. Begroting 2027", "Rondvraag:") is not an action:
+    // it ends in a colon, or it is numbered and the points below it are bullets.
+    const next = lines.slice(index + 1).find((l) => l.trim().length > 0) ?? '';
+    if (!person && (/:\s*$/.test(line) || (NUMBERED.test(raw) && BULLET.test(next) && line.split(/\s+/).length <= 8))) return;
     const title = titleOf(line, text);
     if (title.length < 4) return;
     const urgent = /\b(spoed|urgent|z\.s\.m\.|zsm|asap|onmiddellijk|immediately)\b/i.test(line);

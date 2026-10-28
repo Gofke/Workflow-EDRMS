@@ -38,15 +38,15 @@ export const UNITS = [
 ];
 
 export const USERS = [
-  { ref: 'SYN-MIN-01', email: 'minister@juspol.test', fullName: 'R. Dijkstra', jobPosition: 'Minister of Justice and Police', unit: 'HO-KAB', roles: ['MINISTER'] },
+  { ref: 'SYN-MIN-01', email: 'minister@juspol.test', fullName: 'R. Dijkstra', jobPosition: 'Minister van Justitie en Politie', unit: 'HO-KAB', roles: ['MINISTER'] },
   { ref: 'SYN-DIR-01', email: 'directeur@juspol.test', fullName: 'M. Sardjoe', jobPosition: 'Directeur', unit: 'HO-DIR', roles: ['DIRECTEUR'] },
   { ref: 'SYN-ODIR-01', email: 'onderdirecteur@juspol.test', fullName: 'A. Boldewijn', jobPosition: 'Onder-Directeur', unit: 'HO-DIR', roles: ['ONDER_DIRECTEUR'] },
-  { ref: 'SYN-USER-01', email: 'assistant1@juspol.test', fullName: 'L. Amatredjo', jobPosition: 'Administrative assistant', unit: 'HO-KAB', roles: ['SUPPORT_STAFF'] },
-  { ref: 'SYN-USER-02', email: 'assistant2@juspol.test', fullName: 'K. Pawironadi', jobPosition: 'Registration clerk', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'] },
-  { ref: 'SYN-USER-03', email: 'unauthorised@juspol.test', fullName: 'D. Oemrawsingh', jobPosition: 'Administrative assistant (control account for access tests)', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'] },
-  { ref: 'SYN-ADMIN-01', email: 'sysadmin@juspol.test', fullName: 'V. Ramlal', jobPosition: 'Pilot system administrator', unit: 'HO-ICT', roles: ['SYS_ADMIN'] },
-  { ref: 'SYN-MULTI-01', email: 'dualrole@juspol.test', fullName: 'S. Hiwat', jobPosition: 'Onder-Directeur, also acting support', unit: 'HO-DIR', roles: ['ONDER_DIRECTEUR', 'SUPPORT_STAFF'] },
-  { ref: 'SYN-DISABLED-01', email: 'disabled@juspol.test', fullName: 'J. Kensmil', jobPosition: 'Former assistant (disabled account)', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'], disabled: true },
+  { ref: 'SYN-USER-01', email: 'assistant1@juspol.test', fullName: 'L. Amatredjo', jobPosition: 'Secretaresse van de Minister', unit: 'HO-KAB', roles: ['SUPPORT_STAFF'] },
+  { ref: 'SYN-USER-02', email: 'assistant2@juspol.test', fullName: 'K. Pawironadi', jobPosition: 'Medewerker postregistratie', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'] },
+  { ref: 'SYN-USER-03', email: 'unauthorised@juspol.test', fullName: 'D. Oemrawsingh', jobPosition: 'Administratief medewerker', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'] },
+  { ref: 'SYN-ADMIN-01', email: 'sysadmin@juspol.test', fullName: 'V. Ramlal', jobPosition: 'Systeembeheerder', unit: 'HO-ICT', roles: ['SYS_ADMIN'] },
+  { ref: 'SYN-MULTI-01', email: 'dualrole@juspol.test', fullName: 'S. Hiwat', jobPosition: 'Onder-Directeur Juridische Zaken', unit: 'HO-DIR', roles: ['ONDER_DIRECTEUR', 'SUPPORT_STAFF'] },
+  { ref: 'SYN-DISABLED-01', email: 'disabled@juspol.test', fullName: 'J. Kensmil', jobPosition: 'Oud-medewerker', unit: 'HO-DIR', roles: ['SUPPORT_STAFF'], disabled: true },
 ];
 
 export async function seedAll(): Promise<void> {

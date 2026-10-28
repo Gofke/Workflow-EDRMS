@@ -476,7 +476,7 @@ export class WorkflowService {
   ): Promise<void> {
     const actor = actorDescription.replace(/\s*\([^)]*@[^)]*\)\s*$/, '');
     const params = { identity: dossier.dossierIdentity, subject: dossier.subject, actor, reason: reason ?? '' };
-    const base = { link: `/dossiers/${dossier.id}`, subjectType: 'DOSSIER' as const, subjectId: dossier.id, actorAccountId: actorId, params };
+    const base = { link: `/zaken/${dossier.id}`, subjectType: 'DOSSIER' as const, subjectId: dossier.id, actorAccountId: actorId, params };
     if (type === WorkflowEventType.SUBMITTED) {
       await this.notifications.notify({ ...base, recipients: [reviewerId], kind: 'REVIEW_REQUESTED' });
       return;

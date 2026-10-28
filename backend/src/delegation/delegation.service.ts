@@ -9,7 +9,9 @@ import { Delegation } from './delegation.entity';
 
 export interface DelegationView {
   id: string;
+  principalAccountId: string;
   principalName: string;
+  delegateAccountId: string;
   delegateName: string;
   permittedActions: string[];
   validFrom: string;
@@ -270,7 +272,9 @@ export class DelegationService {
     const now = Date.now();
     return {
       id: row.id,
+      principalAccountId: row.principal.id,
       principalName: row.principal.person.fullName,
+      delegateAccountId: row.delegate.id,
       delegateName: row.delegate.person.fullName,
       permittedActions: this.actionsOf(row),
       validFrom: row.validFrom.toISOString(),

@@ -103,7 +103,7 @@ export class ResponsibilityService {
         subject: dossier.subject,
         actor: actor.description.replace(/\s*\([^)]*@[^)]*\)\s*$/, ''),
       },
-      link: `/dossiers/${dossierId}`,
+      link: `/zaken/${dossierId}`,
       subjectType: 'DOSSIER',
       subjectId: dossierId,
       actorAccountId: actor.accountId,
