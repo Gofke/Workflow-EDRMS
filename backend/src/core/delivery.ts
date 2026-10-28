@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import https from 'https';
 import nodemailer, { Transporter } from 'nodemailer';
 import webpush from 'web-push';
 
@@ -125,6 +126,8 @@ export class PushSender {
           privateKey: keys.privateKey,
         },
         TTL: 3600,
+        // A ministry that runs its own push relay behind an internal CA names it here.
+        ...(process.env.PUSH_EXTRA_CA_FILE ? { agent: new https.Agent({ ca: readFileSync(process.env.PUSH_EXTRA_CA_FILE) }) } : {}),
       },
     );
   }

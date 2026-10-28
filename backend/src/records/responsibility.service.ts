@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
+import { NotificationService } from '../core/notification.service';
 import { loadRegistrationConfig } from '../config/registration-config';
 import { Account } from '../identity/account.entity';
 import { Dossier, assertDossierNotClosed } from './dossier.entity';
@@ -29,6 +30,7 @@ export class ResponsibilityService {
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -91,6 +93,20 @@ export class ResponsibilityService {
       await manager.query(`UPDATE dossier SET version = version + 1 WHERE id = $1`, [dossierId]);
       // One transaction: the assignment and its evidence stand or fall together.
       await this.audit.recordInTransaction(manager, assignEntry);
+    });
+    // V0.3.0: the new owner hears about it.
+    await this.notifications.notify({
+      recipients: [accountId],
+      kind: 'RESPONSIBILITY_ASSIGNED',
+      params: {
+        identity: dossier.dossierIdentity,
+        subject: dossier.subject,
+        actor: actor.description.replace(/\s*\([^)]*@[^)]*\)\s*$/, ''),
+      },
+      link: `/dossiers/${dossierId}`,
+      subjectType: 'DOSSIER',
+      subjectId: dossierId,
+      actorAccountId: actor.accountId,
     });
   }
 

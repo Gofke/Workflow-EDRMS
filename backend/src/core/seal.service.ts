@@ -35,10 +35,11 @@ export class SealService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     this.load();
-    await this.dataSource.query(
-      `INSERT INTO seal_key (key_id, public_key_pem) VALUES ($1, $2) ON CONFLICT (key_id) DO NOTHING`,
-      [this.keyIdValue, this.publicPem],
-    );
+    // On a database that has not been migrated yet the table is missing; the
+    // key is registered again before every seal, so nothing depends on this.
+    await this.dataSource
+      .query(`INSERT INTO seal_key (key_id, public_key_pem) VALUES ($1, $2) ON CONFLICT (key_id) DO NOTHING`, [this.keyIdValue, this.publicPem])
+      .catch(() => undefined);
   }
 
   private load(): void {

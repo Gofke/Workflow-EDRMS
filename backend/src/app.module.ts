@@ -14,9 +14,10 @@ import { SettingsModule } from './settings/settings.module';
 import { AccessModule } from './access/access.module';
 import { OrgModule } from './org/org.module';
 import { TasksModule } from './tasks/tasks.module';
+import { DeadlinesModule } from './deadlines/deadlines.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, DeadlinesModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })
 export class AppModule {}

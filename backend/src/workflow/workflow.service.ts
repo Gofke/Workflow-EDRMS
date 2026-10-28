@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
+import { NotificationService } from '../core/notification.service';
 import { loadWorkflowConfig } from '../config/workflow-config';
 import { DelegationService } from '../delegation/delegation.service';
 import { Account } from '../identity/account.entity';
@@ -25,6 +26,7 @@ export class WorkflowService {
     private readonly delegations: DelegationService,
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /** Officials who may be designated as reviewer (FR-WFL-002, FR-WFL-004). */
@@ -444,6 +446,41 @@ export class WorkflowService {
       );
       await this.audit.recordInTransaction(manager, auditEntry);
     });
+    await this.notifyTransition(dossier, event.eventType, event.actorAccountId, event.reviewerAccountId, event.reason, auditEntry.actorDescription);
+  }
+
+  /**
+   * V0.3.0: the people a decision concerns hear about it — the reviewer when a
+   * matter is sent to them; the person who submitted it and the responsible
+   * official when it is returned, approved or finalised.
+   */
+  private async notifyTransition(
+    dossier: Dossier,
+    type: WorkflowEventType,
+    actorId: string,
+    reviewerId: string | null,
+    reason: string | null,
+    actorDescription: string,
+  ): Promise<void> {
+    const actor = actorDescription.replace(/\s*\([^)]*@[^)]*\)\s*$/, '');
+    const params = { identity: dossier.dossierIdentity, subject: dossier.subject, actor, reason: reason ?? '' };
+    const base = { link: `/dossiers/${dossier.id}`, subjectType: 'DOSSIER' as const, subjectId: dossier.id, actorAccountId: actorId, params };
+    if (type === WorkflowEventType.SUBMITTED) {
+      await this.notifications.notify({ ...base, recipients: [reviewerId], kind: 'REVIEW_REQUESTED' });
+      return;
+    }
+    const [submitter] = await this.dataSource.query(
+      `SELECT actor_account_id FROM workflow_event WHERE dossier_id = $1 AND event_type = 'SUBMITTED' ORDER BY occurred_at DESC LIMIT 1`,
+      [dossier.id],
+    );
+    const [responsible] = await this.dataSource.query(
+      `SELECT responsible_account_id FROM responsibility_assignment WHERE dossier_id = $1 AND superseded_at IS NULL`,
+      [dossier.id],
+    );
+    const recipients = [submitter?.actor_account_id, responsible?.responsible_account_id];
+    if (type === WorkflowEventType.RETURNED) await this.notifications.notify({ ...base, recipients, kind: 'MATTER_RETURNED' });
+    if (type === WorkflowEventType.APPROVED) await this.notifications.notify({ ...base, recipients, kind: 'MATTER_APPROVED' });
+    if (type === WorkflowEventType.FINALISED) await this.notifications.notify({ ...base, recipients, kind: 'MATTER_FINALISED' });
   }
 
   /** The matter as a reviewer sees it: its records and their content hashes. */
