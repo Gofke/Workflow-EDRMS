@@ -9,9 +9,13 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { dataSourceOptions } from './config/data-source';
 import { HealthController } from './health/health.controller';
 import { RecordsModule } from './records/records.module';
+import { CoreModule } from './core/core.module';
+import { SettingsModule } from './settings/settings.module';
+import { AccessModule } from './access/access.module';
+import { OrgModule } from './org/org.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(dataSourceOptions), AuthModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })
 export class AppModule {}

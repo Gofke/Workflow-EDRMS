@@ -6,6 +6,8 @@ import { AuditService } from '../audit/audit.service';
 import { loadRegistrationConfig } from '../config/registration-config';
 import { CorrespondenceItem, ItemState } from './correspondence-item.entity';
 import { CreateDraftDto, ItemView, UpdateDraftDto } from './records.dto';
+import { AccessService } from '../access/access.service';
+import { SettingsService } from '../settings/settings.service';
 
 export interface Actor {
   accountId: string;
@@ -23,29 +25,59 @@ export class RegistrationService {
     @InjectRepository(CorrespondenceItem) private readonly items: Repository<CorrespondenceItem>,
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly access: AccessService,
+    private readonly settings: SettingsService,
   ) {}
 
-  async list(): Promise<ItemView[]> {
+  /**
+   * The newest records. V0.3.0: filtered by the record-level evaluator when the
+   * caller is known, so a classified record never appears in someone's list.
+   */
+  async list(accountId?: string, limit = 200): Promise<ItemView[]> {
     const items = await this.items.find({
       relations: { createdBy: { person: true }, owningUnit: true },
       order: { createdAt: 'DESC' },
-      take: 200,
+      take: accountId ? Math.max(limit, 500) : limit,
     });
-    return items.map(toView);
+    if (!accountId) return items.slice(0, limit).map(toView);
+    const visible = await this.access.visibleItemIds(await this.access.profile(accountId));
+    return items.filter((i) => visible.has(i.id)).slice(0, limit).map(toView);
+  }
+
+  async findOne(id: string): Promise<ItemView> {
+    return toView(await this.load(id));
   }
 
   /** Creates preparatory material. This is not yet an official record. */
-  async createDraft(actor: Actor, dto: CreateDraftDto): Promise<ItemView> {
+  async createDraft(actor: Actor, dto: CreateDraftDto, source = 'MANUAL'): Promise<ItemView> {
     this.assertMandatoryFields(dto);
+    const classification = dto.classification ?? (await this.settings.get('classification')).defaultLevel;
+    if (classification === 'SECRET') {
+      const profile = await this.access.profile(actor.accountId);
+      if (!profile.secret) {
+        throw new BadRequestException('Only a person cleared for Secret may create a Secret record.');
+      }
+    }
 
     // The row and its audit event are one transaction: no authoritative change
     // without its evidence, even for preparatory material.
     const id = await this.dataSource.transaction(async (manager) => {
       const [row] = await manager.query(
         `INSERT INTO correspondence_item (direction, subject, party, document_date, state,
-           created_by_account_id)
-         VALUES ($1, $2, $3, $4, 'DRAFT', $5) RETURNING id`,
-        [dto.direction, dto.subject, dto.party ?? null, dto.documentDate ?? null, actor.accountId],
+           created_by_account_id, owning_unit_id, classification, sender_reference, reply_requested_by, source)
+         VALUES ($1, $2, $3, $4, 'DRAFT', $5,
+                 (SELECT organisational_unit_id FROM account WHERE id = $5), $6, $7, $8, $9) RETURNING id`,
+        [
+          dto.direction,
+          dto.subject,
+          dto.party ?? null,
+          dto.documentDate ?? null,
+          actor.accountId,
+          classification,
+          dto.senderReference?.trim() || null,
+          dto.replyRequestedBy ?? null,
+          source,
+        ],
       );
       await this.audit.recordInTransaction(manager, {
         eventType: AuditEventType.DRAFT_CREATED,
@@ -80,6 +112,8 @@ export class RegistrationService {
         direction: dto.direction,
         party: dto.party ?? null,
         documentDate: dto.documentDate ?? null,
+        senderReference: dto.senderReference?.trim() || null,
+        replyRequestedBy: dto.replyRequestedBy ?? null,
         version: () => '"version" + 1',
       })
       .where('id = :id AND version = :version', { id, version: dto.version })
@@ -199,5 +233,9 @@ function toView(item: CorrespondenceItem): ItemView {
     version: item.version,
     createdByName: item.createdBy?.person?.fullName ?? 'unknown',
     owningUnit: item.owningUnit?.name ?? null,
+    classification: item.classification,
+    source: item.source,
+    senderReference: item.senderReference,
+    replyRequestedBy: item.replyRequestedBy,
   };
 }

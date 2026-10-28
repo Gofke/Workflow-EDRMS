@@ -5,6 +5,11 @@ import { RepresentedAuthority } from '../delegation/delegation.service';
 declare module 'express-session' {
   interface SessionData {
     accountId?: string;
+    /** Password checked; waiting for the second factor. */
+    pendingMfaAccountId?: string;
+    pendingMfaAt?: number;
+    /** Signed in, but must set up two-step verification before anything else. */
+    mfaSetupRequired?: boolean;
   }
 }
 

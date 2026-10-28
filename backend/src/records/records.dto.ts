@@ -17,6 +17,18 @@ export class CreateDraftDto {
 
   @IsOptional() @IsDateString({}, { message: 'The document date must be a valid date.' })
   documentDate?: string;
+
+  /** V0.3.0 — the sender's own reference. */
+  @IsOptional() @IsString() @MaxLength(120)
+  senderReference?: string;
+
+  /** V0.3.0 — the reply date the sender asked for. */
+  @IsOptional() @IsDateString({}, { message: 'The requested reply date must be a valid date.' })
+  replyRequestedBy?: string;
+
+  /** V0.3.0 — classification at creation. Later changes go through the classification route. */
+  @IsOptional() @IsIn(['OPEN', 'INTERNAL', 'CONFIDENTIAL', 'SECRET'], { message: 'Unknown classification.' })
+  classification?: string;
 }
 
 export class UpdateDraftDto extends CreateDraftDto {
@@ -46,6 +58,10 @@ export interface ItemView {
   version: number;
   createdByName: string;
   owningUnit: string | null;
+  classification: string;
+  source: string;
+  senderReference: string | null;
+  replyRequestedBy: string | null;
 }
 
 export class ItemIdDto {

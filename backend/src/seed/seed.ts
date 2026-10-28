@@ -27,6 +27,8 @@ export const ROLES = [
   { code: 'ONDER_DIRECTEUR', name: 'Onder-Directeur', description: 'Delegated operational owner. Progresses delegated matters; approval authority remains explicit, never inherited.' },
   { code: 'SUPPORT_STAFF', name: 'Assistant / support staff', description: 'Operational support. Registers and prepares work. No approval or sign-off authority by default.' },
   { code: 'SYS_ADMIN', name: 'Pilot System Administrator', description: 'Manages accounts, role assignments and configuration. Confers no unrestricted access to business-record content.' },
+  { code: 'AUDITOR', name: 'Auditor', description: 'Phase 3. Reads the audit history, the view log and the integrity checks. Read-only; no record content.' },
+  { code: 'RECORDS_MANAGER', name: 'Records manager', description: 'Phase 3. Maintains the file plan and retention, and takes retention and archive-transfer decisions.' },
 ];
 
 export const UNITS = [

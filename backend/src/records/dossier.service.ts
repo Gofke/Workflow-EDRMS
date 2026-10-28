@@ -8,6 +8,8 @@ import { CorrespondenceItem, ItemState } from './correspondence-item.entity';
 import { assertDossierNotClosed, Dossier, DossierLink } from './dossier.entity';
 import { ResponsibilityAssignment } from './responsibility.entity';
 import { Actor } from './registration.service';
+import { AccessService } from '../access/access.service';
+import { SettingsService } from '../settings/settings.service';
 
 export interface DossierView {
   id: string;
@@ -17,6 +19,14 @@ export interface DossierView {
   processingState: string;
   dueDate: string | null;
   responsibleName: string | null;
+  /** V0.3.0 */
+  responsibleAccountId: string | null;
+  classification: string;
+  categoryId: string | null;
+  legalHold: boolean;
+  retentionState: string;
+  retentionDueDate: string | null;
+  owningUnit: string | null;
   createdAt: string;
   version: number;
   createdByName: string;
@@ -41,14 +51,20 @@ export class DossierService {
     @InjectRepository(CorrespondenceItem) private readonly items: Repository<CorrespondenceItem>,
     private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly access: AccessService,
+    private readonly settings: SettingsService,
   ) {}
 
-  async list(): Promise<DossierView[]> {
-    const dossiers = await this.dossiers.find({
-      relations: { createdBy: { person: true } },
+  async list(accountId?: string): Promise<DossierView[]> {
+    let dossiers = await this.dossiers.find({
+      relations: { createdBy: { person: true }, owningUnit: true },
       order: { createdAt: 'DESC' },
-      take: 200,
+      take: accountId ? 1000 : 200,
     });
+    if (accountId) {
+      const visible = await this.access.visibleDossierIds(await this.access.profile(accountId));
+      dossiers = dossiers.filter((d) => visible.has(d.id)).slice(0, 200);
+    }
     const links = await this.links.find({ relations: { dossier: true, item: true } });
     const current = await this.assignments.find({
       where: { supersededAt: IsNull() },
@@ -61,21 +77,38 @@ export class DossierService {
    * Creates the workspace for a matter. The identity is assigned server-side
    * from a sequence; the creation time is the database's own.
    */
-  async create(actor: Actor, subject: string): Promise<DossierView> {
+  async create(actor: Actor, subject: string, options: { categoryId?: string; classification?: string } = {}): Promise<DossierView> {
     if (!subject || subject.trim() === '') {
       throw new BadRequestException('A subject is required.');
     }
+    let category: { id: string; default_classification: string; code: string } | null = null;
+    if (options.categoryId) {
+      [category] = await this.dataSource.query(
+        `SELECT id, default_classification, code FROM dossier_category WHERE id = $1 AND is_active`,
+        [options.categoryId],
+      );
+      if (!category) throw new BadRequestException('Unknown or inactive category.');
+    }
+    const classification =
+      options.classification ?? category?.default_classification ?? (await this.settings.get('classification')).defaultLevel;
+    if (classification === 'SECRET' && !(await this.access.profile(actor.accountId)).secret) {
+      throw new BadRequestException('Only a person cleared for Secret may open a Secret dossier.');
+    }
+    const numbering = await this.settings.get('numbering');
+    const pattern = numbering.dossierPattern ?? this.config.dossierIdentityPattern;
+    const padding = numbering.dossierPadding ?? this.config.dossierSequencePadding;
 
     const created = await this.dataSource.transaction(async (manager) => {
       const [{ nextval }] = await manager.query(`SELECT nextval('dossier_sequence') AS nextval`);
-      const identity = this.config.dossierIdentityPattern
+      const identity = pattern
         .replace('{YEAR}', String(new Date().getFullYear()))
-        .replace('{SEQ}', String(nextval).padStart(this.config.dossierSequencePadding, '0'));
+        .replace('{CATEGORY}', category?.code ?? 'ALG')
+        .replace('{SEQ}', String(nextval).padStart(padding, '0'));
 
       const [row] = await manager.query(
-        `INSERT INTO dossier (dossier_identity, subject, created_by_account_id)
-         VALUES ($1, $2, $3) RETURNING id`,
-        [identity, subject.trim(), actor.accountId],
+        `INSERT INTO dossier (dossier_identity, subject, created_by_account_id, owning_unit_id, classification, category_id)
+         VALUES ($1, $2, $3, (SELECT organisational_unit_id FROM account WHERE id = $3), $4, $5) RETURNING id`,
+        [identity, subject.trim(), actor.accountId, classification, category?.id ?? null],
       );
       await this.audit.recordInTransaction(manager, {
         eventType: AuditEventType.DOSSIER_CREATED,
@@ -154,7 +187,7 @@ export class DossierService {
   private async load(id: string): Promise<DossierView> {
     const dossier = await this.dossiers.findOne({
       where: { id },
-      relations: { createdBy: { person: true } },
+      relations: { createdBy: { person: true }, owningUnit: true },
     });
     if (!dossier) throw new NotFoundException('Unknown dossier.');
     const links = await this.links.find({
@@ -183,6 +216,13 @@ function toView(
     processingState: dossier.processingState,
     dueDate: dossier.dueDate,
     responsibleName: owner?.responsible?.person?.fullName ?? null,
+    responsibleAccountId: owner?.responsible?.id ?? null,
+    classification: dossier.classification,
+    categoryId: dossier.categoryId,
+    legalHold: dossier.legalHold,
+    retentionState: dossier.retentionState,
+    retentionDueDate: dossier.retentionDueDate,
+    owningUnit: dossier.owningUnit?.name ?? null,
     createdAt: dossier.createdAt.toISOString(),
     version: dossier.version,
     createdByName: dossier.createdBy?.person?.fullName ?? 'unknown',

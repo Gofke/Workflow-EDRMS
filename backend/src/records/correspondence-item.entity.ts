@@ -85,4 +85,23 @@ export class CorrespondenceItem {
   @ManyToOne(() => OrganisationalUnit, { nullable: true })
   @JoinColumn({ name: 'owning_unit_id' })
   owningUnit: OrganisationalUnit | null;
+
+  /** V0.3.0 — OPEN, INTERNAL, CONFIDENTIAL or SECRET (provisional, DEC-02). */
+  @Column({ name: 'classification', type: 'varchar', length: 20, default: 'INTERNAL' })
+  classification: string;
+
+  /** V0.3.0 — how the item reached the ministry. */
+  @Column({ name: 'source', type: 'varchar', length: 20, default: 'MANUAL' })
+  source: string;
+
+  /** V0.3.0 — the sender's own reference ("uw kenmerk"). Never an identity here. */
+  @Column({ name: 'sender_reference', type: 'varchar', length: 120, nullable: true })
+  senderReference: string | null;
+
+  /** V0.3.0 — the reply date the sender asked for, if any. */
+  @Column({ name: 'reply_requested_by', type: 'date', nullable: true })
+  replyRequestedBy: string | null;
+
+  @Column({ name: 'in_reply_to_item_id', type: 'uuid', nullable: true })
+  inReplyToItemId: string | null;
 }

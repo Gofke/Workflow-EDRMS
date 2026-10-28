@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 
@@ -29,6 +29,18 @@ export class SessionGuard implements CanActivate {
     }
 
     request.authenticatedUser = user;
+
+    // Phase 3: a role that must use two-step verification may reach only the
+    // screens that set it up until it has done so.
+    if (request.session.mfaSetupRequired && !user.mfaEnabled) {
+      const path = request.originalUrl ?? request.url ?? '';
+      const allowed = ['/api/auth/', '/api/security/mfa', '/api/settings/public', '/api/settings/client'];
+      if (!allowed.some((prefix) => path.startsWith(prefix))) {
+        throw new ForbiddenException('Set up two-step verification before continuing.');
+      }
+    } else if (request.session.mfaSetupRequired && user.mfaEnabled) {
+      request.session.mfaSetupRequired = false;
+    }
     return true;
   }
 }

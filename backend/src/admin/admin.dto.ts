@@ -4,7 +4,7 @@ export class RoleChangeDto {
   @IsUUID('4', { message: 'A valid account identifier is required.' })
   accountId: string;
 
-  @IsIn(['MINISTER', 'DIRECTEUR', 'ONDER_DIRECTEUR', 'SUPPORT_STAFF', 'SYS_ADMIN'], {
+  @IsIn(['MINISTER', 'DIRECTEUR', 'ONDER_DIRECTEUR', 'SUPPORT_STAFF', 'SYS_ADMIN', 'AUDITOR', 'RECORDS_MANAGER'], {
     message: 'Unknown functional role.',
   })
   roleCode: string;

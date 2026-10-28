@@ -4,6 +4,7 @@ import { RequireRoles } from '../auth/require-roles.decorator';
 import { ItemView, CreateDraftDto, RegisterDto, UpdateDraftDto } from './records.dto';
 import { DuplicateService, PossibleDuplicate } from './duplicate.service';
 import { Actor, RegistrationService } from './registration.service';
+import { AccessService } from '../access/access.service';
 
 /**
  * Registration is support-staff work (FR-SEC-008): an assistant prepares and
@@ -21,12 +22,19 @@ export class RecordsController {
   constructor(
     private readonly registration: RegistrationService,
     private readonly duplicates: DuplicateService,
+    private readonly access: AccessService,
   ) {}
 
   @Get()
   @RequireRoles(...REGISTRARS)
-  list(): Promise<ItemView[]> {
-    return this.registration.list();
+  list(@Req() request: Request): Promise<ItemView[]> {
+    return this.registration.list(request.authenticatedUser?.accountId);
+  }
+
+  @Get(':id')
+  @RequireRoles(...REGISTRARS)
+  one(@Param('id') id: string): Promise<ItemView> {
+    return this.registration.findOne(id);
   }
 
   /**
@@ -35,8 +43,12 @@ export class RecordsController {
    */
   @Get(':id/possible-duplicates')
   @RequireRoles(...REGISTRARS)
-  possibleDuplicates(@Param('id') id: string): Promise<PossibleDuplicate[]> {
-    return this.duplicates.candidatesFor(id);
+  async possibleDuplicates(@Param('id') id: string, @Req() request: Request): Promise<PossibleDuplicate[]> {
+    // V0.3.0: the Gate 4 dependency noted on the warning — a candidate is shown
+    // only if the person may see it.
+    const candidates = await this.duplicates.candidatesFor(id);
+    const visible = await this.access.visibleItemIds(await this.access.profile(request.authenticatedUser!.accountId));
+    return candidates.filter((c) => visible.has(c.itemId));
   }
 
   @Post('drafts')

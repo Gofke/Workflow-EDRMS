@@ -4,13 +4,15 @@ import { AuditModule } from '../audit/audit.module';
 import { Account } from '../identity/account.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { MfaService } from './mfa.service';
 import { RolesGuard } from './roles.guard';
+import { SecurityController } from './security.controller';
 import { SessionGuard } from './session.guard';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Account]), AuditModule],
-  controllers: [AuthController],
-  providers: [AuthService, SessionGuard, RolesGuard],
-  exports: [AuthService, SessionGuard, RolesGuard],
+  controllers: [AuthController, SecurityController],
+  providers: [AuthService, MfaService, SessionGuard, RolesGuard],
+  exports: [AuthService, MfaService, SessionGuard, RolesGuard],
 })
 export class AuthModule {}

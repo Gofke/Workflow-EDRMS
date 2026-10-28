@@ -85,6 +85,23 @@ export class Dossier {
   @ManyToOne(() => OrganisationalUnit, { nullable: true })
   @JoinColumn({ name: 'owning_unit_id' })
   owningUnit: OrganisationalUnit | null;
+
+  /** V0.3.0 — classification (provisional, DEC-02). */
+  @Column({ name: 'classification', type: 'varchar', length: 20, default: 'INTERNAL' })
+  classification: string;
+
+  /** V0.3.0 — place in the file plan. */
+  @Column({ name: 'category_id', type: 'uuid', nullable: true })
+  categoryId: string | null;
+
+  @Column({ name: 'legal_hold', type: 'boolean', default: false })
+  legalHold: boolean;
+
+  @Column({ name: 'retention_due_date', type: 'date', nullable: true })
+  retentionDueDate: string | null;
+
+  @Column({ name: 'retention_state', type: 'varchar', length: 20, default: 'ACTIVE' })
+  retentionState: string;
 }
 
 /**

@@ -19,4 +19,17 @@ export interface AuthenticatedUser {
   jobPosition: string | null;
   organisationalUnit: string | null;
   roles: { code: string; name: string }[];
+  /** Phase 3: the unit's identifier, for screens that filter by department. */
+  unitId?: string | null;
+  /** Phase 3: whether two-step verification is switched on for this account. */
+  mfaEnabled?: boolean;
+  /** Phase 3: the person's chosen language. */
+  language?: 'nl' | 'en';
+}
+
+export class MfaCodeDto {
+  @IsString()
+  @MinLength(6, { message: 'Enter the code from your authenticator app.' })
+  @MaxLength(20)
+  code: string;
 }

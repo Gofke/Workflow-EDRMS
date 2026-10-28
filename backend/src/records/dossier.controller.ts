@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -23,6 +24,16 @@ export class CreateDossierDto {
   @MinLength(1, { message: 'A subject is required.' })
   @MaxLength(400)
   subject: string;
+
+  /** V0.3.0 — place in the file plan. */
+  @IsOptional()
+  @IsUUID('4', { message: 'Choose a valid category.' })
+  categoryId?: string;
+
+  /** V0.3.0 — classification at opening. */
+  @IsOptional()
+  @IsIn(['OPEN', 'INTERNAL', 'CONFIDENTIAL', 'SECRET'], { message: 'Unknown classification.' })
+  classification?: string;
 }
 
 export class LinkRecordDto {
@@ -96,15 +107,18 @@ export class DossierController {
 
   @Get()
   @RequireRoles(...REGISTRARS)
-  list(): Promise<DossierView[]> {
-    return this.dossiers.list();
+  list(@Req() request: Request): Promise<DossierView[]> {
+    return this.dossiers.list(request.authenticatedUser?.accountId);
   }
 
   @Post()
   @RequireRoles(...REGISTRARS)
   @HttpCode(201)
   create(@Body() dto: CreateDossierDto, @Req() request: Request): Promise<DossierView> {
-    return this.dossiers.create(actorFrom(request), dto.subject);
+    return this.dossiers.create(actorFrom(request), dto.subject, {
+      categoryId: dto.categoryId,
+      classification: dto.classification,
+    });
   }
 
   @Post(':id/links')
