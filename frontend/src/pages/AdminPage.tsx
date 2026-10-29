@@ -5,6 +5,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { AI_FEATURE, CLASSIFICATION, PRIORITY, ROLE } from '../lib/labels';
+import { auditSummaryNl } from '../lib/auditText';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
 import { Badge, Confirm, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Tabs, useToast } from '../ui';
@@ -1406,7 +1407,7 @@ function SecurityTab() {
               <li key={i} className="row" style={{ gap: 10, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
                 <ShieldAlert size={18} style={{ color: 'var(--danger)', flex: 'none' }} />
                 <span className="small">
-                  {l.summary}
+                  {language === 'en' ? l.summary : auditSummaryNl(l.summary)}
                   <span className="xs muted" style={{ display: 'block' }}>
                     {dateTime(l.occurredAt, language)}
                   </span>

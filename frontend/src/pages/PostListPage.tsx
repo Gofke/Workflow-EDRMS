@@ -238,7 +238,7 @@ function NewItemDialog({ onClose }: { onClose: () => void }) {
                 {t('Ander bestand', 'Another file')}
               </button>
             </div>
-          ) : (
+          ) : camera ? null : (
             <div className="row">
               <label className="btn">
                 <FileUp size={18} /> {t('Bestand of scan kiezen', 'Choose a file or scan')}
@@ -299,7 +299,7 @@ export function CameraCapture({ onCapture, onCancel }: { onCapture: (file: File)
           </label>
         </>
       ) : (
-        <video ref={video} playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
+        <video ref={video} playsInline muted style={{ width: '100%', maxHeight: '52vh', objectFit: 'cover', borderRadius: 8, background: '#000' }} />
       )}
       <div className="row">
         {!error && (
@@ -308,7 +308,7 @@ export function CameraCapture({ onCapture, onCancel }: { onCapture: (file: File)
           </button>
         )}
         <button type="button" className="btn" onClick={onCancel}>
-          {t('Annuleren', 'Cancel')}
+          {t('Camera sluiten', 'Close camera')}
         </button>
       </div>
     </div>

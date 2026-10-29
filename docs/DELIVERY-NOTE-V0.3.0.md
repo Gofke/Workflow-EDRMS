@@ -1,6 +1,6 @@
 # Delivery note — JusPol EDRMS V0.3.0 (Phase 3)
 
-Date: {{DATE}}
+Date: 29 October 2026
 
 ## What this delivery is
 
@@ -18,11 +18,11 @@ with a screenshot of it running on the demonstration data.
 
 | Check | Result |
 |---|---|
-| Backend integration suite (real PostgreSQL 16) | {{BACKEND_TESTS}} |
-| Frontend component tests | {{FRONTEND_TESTS}} |
+| Backend integration suite (real PostgreSQL 16) | 295 of 295 tests pass (24 suites) |
+| Frontend component tests | 26 of 26 tests pass (9 files) |
 | Production build (backend `tsc`, frontend `vite build`) | passes |
 | HTTPS behind nginx 1.24, production mode | secure HttpOnly SameSite cookie; HSTS and CSP on every response; service worker registered; PDF viewer works under the CSP |
-| Backup and restore (`deploy/test-backup-restore.sh` on the demonstration database) | rows, all 64 files (SHA-256), seal key and audit hash chain identical on the restored copy; a damaged backup is refused |
+| Backup and restore (`deploy/test-backup-restore.sh` on the demonstration database) | rows, all 63 stored files (SHA-256), seal key and audit hash chain identical on the restored copy; a damaged backup is refused |
 | Integrity check on the demonstration data | audit chain intact, all files unchanged, all seals valid |
 | Screenshots | every feature, as the role that uses it, in Dutch, English, dark, high contrast, large text and on a phone |
 

@@ -132,7 +132,7 @@ export function NewTaskDialog({ onClose, onCreated, itemId, dossierId, parentTas
                 <strong className="small">{t('Dit sjabloon maakt', 'This template creates')}</strong>
                 <ul className="small">
                   <li>
-                    {t('Taak', 'Task')}: {tp.titleTemplate}
+                    {t('Taak', 'Task')}: {tp.titleTemplate.replace(/\{subject\}/g, t('[onderwerp van de zaak]', '[subject of the matter]')).replace(/\{(\w+)\}/g, '[$1]')}
                     {tp.defaultDueWorkingDays ? t(`, termijn ${tp.defaultDueWorkingDays} werkdagen`, `, due in ${tp.defaultDueWorkingDays} working days`) : ''}
                   </li>
                   {tp.checklist.length > 0 && (

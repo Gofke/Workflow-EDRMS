@@ -31,9 +31,16 @@ const date = (iso: string) => iso.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3-$2-$1
 const plural = (n: string, one: string, many: string) => `${n} ${n === '1' ? one : many}`;
 
 type Rule = [RegExp, (...m: string[]) => string];
+const REFUSED: Record<string, string> = {
+  'incorrect password': 'verkeerd wachtwoord',
+  'no such account': 'onbekend account',
+  'account disabled': 'account uitgeschakeld',
+};
 
 const RULES: Rule[] = [
+  [/^(.+?) signed in with two-step verification\.$/, (who) => `${who} heeft zich aangemeld, met tweestapsverificatie.`],
   [/^(.+?) signed in\.$/, (who) => `${who} heeft zich aangemeld.`],
+  [/^A sign-in attempt for (\S+) was refused \((.+)\)\.$/, (who, why) => `Een aanmeldpoging voor ${who} is geweigerd (${REFUSED[why] ?? why}).`],
   [/^(.+?) signed out\.$/, (who) => `${who} heeft zich afgemeld.`],
   [/^(.+?) created a draft (incoming|outgoing|internal) item: (.+)$/, (who, dir, s) => `${who} maakte een concept ${{ incoming: 'inkomend', outgoing: 'uitgaand', internal: 'intern' }[dir]} stuk aan: ${s}`],
   [/^(.+?) captured the document (.+?) against a draft item\.$/, (who, f) => `${who} legde het document ${f} vast bij een concept.`],
@@ -95,6 +102,7 @@ const RULES: Rule[] = [
   [/^(.+?) returned (\S+) for correction \(reason: (.+)\)\.$/, (who, d, why) => `${who} stuurde ${d} terug ter correctie (reden: ${why}).`],
   [/^(.+?) recorded the retention decision (\w+) for (\S+) \(reason: (.+)\)\.$/, (who, dec, d, why) =>
     `${who} legde het bewaarbesluit "${{ DESTROY: 'vernietigen', TRANSFER: 'overbrengen', RETAIN: 'blijvend bewaren', EXTEND: 'verlengen' }[dec] ?? dec}" vast voor ${d} (reden: ${why}).`],
+  [/^Sign-in for (\S+) was locked for (\d+) minutes after (\d+) failed attempts\.$/, (who, m, n) => `Aanmelden voor ${who} is ${m} minuten geblokkeerd na ${n} mislukte pogingen.`],
   [/^Sign-in failed for (.+?)(?: \((.+)\))?\.$/, (who, why) => `Aanmelden mislukt voor ${who}${why ? ` (${why})` : ''}.`],
 ];
 

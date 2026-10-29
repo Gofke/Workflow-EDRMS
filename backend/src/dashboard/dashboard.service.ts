@@ -133,9 +133,10 @@ export class DashboardService {
     const recentPred = this.access.dossierPredicate(profile, 'd', 1);
     const recent = await this.dataSource.query(
       `SELECT we.event_type AS "eventType", we.occurred_at AS "occurredAt", d.id AS "dossierId", d.dossier_identity AS "dossierIdentity",
-              d.subject, p.full_name AS "actorName"
+              d.subject, p.full_name AS "actorName", rp.full_name AS "reviewerName"
          FROM workflow_event we JOIN dossier d ON d.id = we.dossier_id
          JOIN account a ON a.id = we.actor_account_id JOIN person p ON p.id = a.person_id
+         LEFT JOIN account ra ON ra.id = we.reviewer_account_id LEFT JOIN person rp ON rp.id = ra.person_id
         WHERE ${recentPred.sql}
         ORDER BY we.occurred_at DESC LIMIT 10`,
       recentPred.params,

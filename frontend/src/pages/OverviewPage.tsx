@@ -18,7 +18,7 @@ interface Overview {
   byUnit: { id: string; name: string; code: string; registered: number; open: number; overdue: number; finalised: number; avgHandlingDays: number | null; onTimePct: number | null; openTasks: number; overdueTasks: number }[];
   overdue: { id: string; dossierIdentity: string; subject: string; dueDate: string; processingState: string; responsibleName: string | null; unit: string | null; workingDaysLate: number }[];
   trends: { months: { month: string; incoming: number; outgoing: number; internal: number; finalised: number; tasksCompleted: number }[] };
-  recentDecisions: { eventType: string; occurredAt: string; dossierId: string; dossierIdentity: string; subject: string; actorName: string }[];
+  recentDecisions: { eventType: string; occurredAt: string; dossierId: string; dossierIdentity: string; subject: string; actorName: string; reviewerName?: string | null }[];
 }
 
 export function monthLabel(m: string, language: string): string {
@@ -210,7 +210,10 @@ export default function OverviewPage() {
                         <span className="meta">
                           <Stamp value={r.dossierIdentity} />
                           <span>
-                            {workflowLabel(t, r.eventType)}, {r.actorName}, {ago(r.occurredAt, language)}
+                            {r.eventType === 'SUBMITTED' && r.reviewerName
+                              ? t(`Voorgelegd aan ${r.reviewerName} door ${r.actorName}`, `Put to ${r.reviewerName} by ${r.actorName}`)
+                              : `${workflowLabel(t, r.eventType)}, ${r.actorName}`}
+                            , {ago(r.occurredAt, language)}
                           </span>
                         </span>
                       </span>
