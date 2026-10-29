@@ -105,6 +105,11 @@ describe('Phase 3 case files', () => {
     expect(due.map((d: { id: string }) => d.id)).toContain(dossier.id);
     const { agent: minister } = await signIn(h.app, 'minister@juspol.test');
     await minister.post(`/api/dossiers/${dossier.id}/legal-hold`).send({ action: 'SET', reason: 'Lopende rechtszaak' }).expect(200);
+    // The records manager sees it in the list of holds, with the reason and who set it.
+    const holds = (await rm.get('/api/casefiles/legal-holds').expect(200)).body;
+    expect(holds.find((x: { id: string }) => x.id === dossier.id)).toMatchObject({ holdReason: 'Lopende rechtszaak', heldByName: 'R. Dijkstra', state: 'CLOSED' });
+    const { agent: staff } = await signIn(h.app, 'assistant1@juspol.test');
+    await staff.get('/api/casefiles/legal-holds').expect(403);
     await rm.post(`/api/dossiers/${dossier.id}/retention`).send({ decision: 'DESTROY', reason: 'Termijn verstreken' }).expect(400);
     // The database refuses it too.
     await expect(h.db.query(`UPDATE dossier SET retention_state = 'DESTROYED' WHERE id = $1`, [dossier.id])).rejects.toThrow(/legal hold/);

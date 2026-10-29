@@ -225,7 +225,7 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
         WHERE d.due_date IS NOT NULL AND d.state <> 'CLOSED' AND d.processing_state NOT IN ('APPROVED','FINALISED')`,
     );
     const advice = await this.dataSource.query(
-      `SELECT ar.id, 'Advies ' || d.dossier_identity || ' — ' || left(ar.question, 80) AS label,
+      `SELECT ar.id, 'Advies ' || d.dossier_identity || ' — ' || ar.question AS label,
               to_char(ar.due_date, 'YYYY-MM-DD') AS due, ar.requested_from_account_id AS holder, fp.full_name AS holder_name,
               ar.requested_by_account_id AS owner, d.id AS dossier_id
          FROM advice_request ar JOIN dossier d ON d.id = ar.dossier_id
@@ -233,9 +233,9 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
         WHERE ar.status = 'OPEN' AND ar.due_date IS NOT NULL`,
     );
     return [
-      ...tasks.map((t: Record<string, string>) => ({ type: 'TASK' as const, id: t.id, label: t.label, due: t.due, holder: t.holder, holderName: t.holder_name, owner: t.owner, unitHead: null, link: `/taken/${t.id}` })),
-      ...dossiers.map((d: Record<string, string>) => ({ type: 'DOSSIER' as const, id: d.id, label: d.label, due: d.due, holder: d.holder, holderName: d.holder_name, owner: null, unitHead: d.unit_head, link: `/zaken/${d.id}` })),
-      ...advice.map((a: Record<string, string>) => ({ type: 'ADVICE' as const, id: a.id, label: a.label, due: a.due, holder: a.holder, holderName: a.holder_name, owner: a.owner, unitHead: null, link: `/zaken/${a.dossier_id}` })),
+      ...tasks.map((t: Record<string, string>) => ({ type: 'TASK' as const, id: t.id, label: shorten(t.label), due: t.due, holder: t.holder, holderName: t.holder_name, owner: t.owner, unitHead: null, link: `/taken/${t.id}` })),
+      ...dossiers.map((d: Record<string, string>) => ({ type: 'DOSSIER' as const, id: d.id, label: shorten(d.label), due: d.due, holder: d.holder, holderName: d.holder_name, owner: null, unitHead: d.unit_head, link: `/zaken/${d.id}` })),
+      ...advice.map((a: Record<string, string>) => ({ type: 'ADVICE' as const, id: a.id, label: shorten(a.label), due: a.due, holder: a.holder, holderName: a.holder_name, owner: a.owner, unitHead: null, link: `/zaken/${a.dossier_id}` })),
     ];
   }
 
@@ -258,7 +258,7 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
       );
       if (items.length) {
         const en = person.language === 'en';
-        const subject = en ? `Daily summary: ${items.length} notification(s)` : `Dagoverzicht: ${items.length} melding(en)`;
+        const subject = en ? `Daily summary: ${items.length} ${items.length === 1 ? 'notification' : 'notifications'}` : `Dagoverzicht: ${items.length} ${items.length === 1 ? 'melding' : 'meldingen'}`;
         const text = items.map((i) => `• ${i.title}\n  ${i.body}`).join('\n');
         await this.notifications.queueEmail(person.id, person.email, subject, text, emailHtml(branding, subject, items.map((i) => `• ${i.title}`).join(' \n'), '/meldingen'), 'DIGEST');
         sent += 1;
@@ -299,4 +299,12 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
     await this.notifications.flush();
     return { sent: recipients.length };
   }
+}
+
+/** A label short enough for a notification title, cut between words. */
+function shorten(label: string, max = 110): string {
+  const clean = label.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 20)).replace(/[\s,.;:—-]+$/, '')}…`;
 }

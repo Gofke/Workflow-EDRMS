@@ -291,7 +291,9 @@ export class LettersService {
     const meta: [string, string][] = [
       ['Ons kenmerk', item.registration_identity ?? 'CONCEPT — volgt na registratie'],
       ...(item.reply_to_sender_reference ? ([['Uw kenmerk', item.reply_to_sender_reference]] as [string, string][]) : []),
-      ...(item.reply_to_identity ? ([['Uw brief', `${item.reply_to_identity}${item.reply_to_date ? ` van ${longDate(item.reply_to_date)}` : ''}`]] as [string, string][]) : []),
+      ...(item.reply_to_identity
+        ? ([['Uw brief', `${item.reply_to_date ? `van ${longDate(item.reply_to_date)}, ` : ''}bij ons geregistreerd onder ${item.reply_to_identity}`]] as [string, string][])
+        : []),
       ['Betreft', item.subject.replace(/^Antwoord: /, '')],
     ];
     for (const [label, value] of meta) {

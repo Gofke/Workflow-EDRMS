@@ -2,12 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AccessService, isUuid } from '../access/access.service';
-import { MANAGEMENT_ROLES, todayInSuriname } from '../common/actor';
+import { MANAGEMENT_ROLES, readableDate, todayInSuriname } from '../common/actor';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { Actor } from '../records/registration.service';
 import { AiService, BUILTIN_MODEL, Engine } from './ai.service';
 import { looksLikeDataQuestion } from './engine/ask';
-import { looseDate } from './engine/dates';
+import { longDutchDate, looseDate } from './engine/dates';
 import { HELP, searchHelp } from './engine/help';
 import { detectLanguage, distance, excerpt, normalise } from './engine/text';
 
@@ -45,6 +45,28 @@ const SUGGEST_EN = ['What is waiting for me today?', 'Which matters are at risk 
  * The conversation is private to the person who had it and is kept, like
  * every assistant answer, so what was said can be shown afterwards.
  */
+
+/** What the chat was asked to do, in the words the history shows. */
+const INTENT_NL: Record<string, string> = {
+  ask: 'Chat, vraag over het werk',
+  capabilities: 'Chat, wat de assistent kan',
+  'draft-reply': 'Chat, conceptantwoord',
+  fallback: 'Chat',
+  greeting: 'Chat, begroeting',
+  help: 'Chat, uitleg',
+  'meeting-notes': 'Chat, notulen naar taken',
+  'my-work': 'Chat, mijn werk',
+  'need-context': 'Chat',
+  'not-found': 'Chat, niet gevonden',
+  refused: 'Chat, geweigerd',
+  risk: 'Chat, termijnrisico',
+  summary: 'Chat, samenvatting',
+  'switched-off': 'Chat, functie uit',
+  'task-proposal': 'Chat, taakvoorstel',
+  thanks: 'Chat',
+  translate: 'Chat, vertalen',
+};
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -126,7 +148,7 @@ export class ChatService {
       'chat',
       context,
       engine,
-      `Chat (${reply.intent}): ${excerpt(message, 200)}`,
+      `${INTENT_NL[reply.intent] ?? 'Chat'}: ${excerpt(message, 200)}`,
       { intent: reply.intent, content: reply.content, cards: reply.cards },
       started,
     );
@@ -250,14 +272,14 @@ export class ChatService {
       if (!(await this.ai.enabled('risk'))) throw Object.assign(new Error('off'), { status: 403 });
       const profile = await this.access.profile(actor.accountId);
       const manager = profile.roles.some((r) => MANAGEMENT_ROLES.includes(r));
-      const r = await this.ai.risk(actor, manager ? 'all' : 'mine');
+      const r = await this.ai.risk(actor, manager ? 'all' : 'mine', en ? 'en' : 'nl');
       const top = r.dossiers.filter((d) => d.level !== 'LOW').slice(0, 6);
       const content = en
         ? top.length
-          ? `${r.counts.high} matter(s) at high risk and ${r.counts.medium} at medium risk${manager ? ' across what you may see' : ' in your own work'}.`
+          ? `${r.counts.high} matter${r.counts.high === 1 ? '' : 's'} at high risk and ${r.counts.medium} at medium risk${manager ? ' across what you may see' : ' in your own work'}.`
           : 'I see no matters at risk of missing their deadline.'
         : top.length
-          ? `${r.counts.high} zaak/zaken met hoog risico en ${r.counts.medium} met middel risico${manager ? ' in alles wat u mag zien' : ' in uw eigen werk'}.`
+          ? `${r.counts.high} ${r.counts.high === 1 ? 'zaak' : 'zaken'} met hoog risico en ${r.counts.medium} met middel risico${manager ? ' in alles wat u mag zien' : ' in uw eigen werk'}.`
           : 'Ik zie geen zaken die hun termijn dreigen te missen.';
       return {
         intent: 'risk',
@@ -326,15 +348,15 @@ export class ChatService {
     const w = await this.dashboard.myWork(actor.accountId);
     const s = w.summary;
     const parts: string[] = [];
-    if (s.awaitingMyDecision) parts.push(en ? `${s.awaitingMyDecision} matter(s) await your decision` : `${s.awaitingMyDecision} zaak/zaken wacht(en) op uw besluit`);
-    if (s.overdueTasks) parts.push(en ? `${s.overdueTasks} task(s) are overdue` : `${s.overdueTasks} taak/taken is/zijn te laat`);
-    if (s.dueThisWeek) parts.push(en ? `${s.dueThisWeek} task(s) are due this week` : `${s.dueThisWeek} taak/taken verlopen deze week`);
-    if (s.adviceToGive) parts.push(en ? `${s.adviceToGive} advice request(s) are waiting for you` : `er wachten ${s.adviceToGive} adviesaanvra(a)g(en) op u`);
-    if (s.overdueMatters) parts.push(en ? `${s.overdueMatters} of your matters are past their deadline` : `${s.overdueMatters} van uw zaken is/zijn over termijn`);
-    if (s.draftsToRegister) parts.push(en ? `${s.draftsToRegister} draft(s) still need registering` : `${s.draftsToRegister} concept(en) moet(en) nog worden geregistreerd`);
+    if (s.awaitingMyDecision) parts.push(en ? `${n(s.awaitingMyDecision, 'matter awaits', 'matters await')} your decision` : `${n(s.awaitingMyDecision, 'zaak wacht', 'zaken wachten')} op uw besluit`);
+    if (s.overdueTasks) parts.push(en ? `${n(s.overdueTasks, 'task is', 'tasks are')} overdue` : `${n(s.overdueTasks, 'taak is', 'taken zijn')} te laat`);
+    if (s.dueThisWeek) parts.push(en ? `${n(s.dueThisWeek, 'task is', 'tasks are')} due this week` : `${n(s.dueThisWeek, 'taak verloopt', 'taken verlopen')} deze week`);
+    if (s.adviceToGive) parts.push(en ? `${n(s.adviceToGive, 'advice request is', 'advice requests are')} waiting for you` : s.adviceToGive === 1 ? 'er wacht 1 adviesaanvraag op u' : `er wachten ${s.adviceToGive} adviesaanvragen op u`);
+    if (s.overdueMatters) parts.push(en ? (s.overdueMatters === 1 ? '1 of your matters is past its deadline' : `${s.overdueMatters} of your matters are past their deadline`) : s.overdueMatters === 1 ? '1 van uw zaken is over termijn' : `${s.overdueMatters} van uw zaken zijn over termijn`);
+    if (s.draftsToRegister) parts.push(en ? `${n(s.draftsToRegister, 'draft still needs', 'drafts still need')} registering` : `${n(s.draftsToRegister, 'concept moet', 'concepten moeten')} nog worden geregistreerd`);
     const content = parts.length
-      ? `${en ? 'Today' : 'Vandaag'} (${w.today}): ${parts.join('; ')}. ${en ? `In total you have ${s.openTasks} open task(s).` : `In totaal hebt u ${s.openTasks} open ta(a)k(en).`}`
-      : en ? `Nothing urgent is waiting for you today. You have ${s.openTasks} open task(s).` : `Er staat vandaag niets dringends voor u klaar. U hebt ${s.openTasks} open ta(a)k(en).`;
+      ? `${en ? `Today, ${readableDate(w.today)}` : `Vandaag, ${longDutchDate(w.today)}`}: ${parts.join('; ')}. ${en ? `In total you have ${n(s.openTasks, 'open task', 'open tasks')}.` : `In totaal hebt u ${n(s.openTasks, 'open taak', 'open taken')}.`}`
+      : en ? `Nothing urgent is waiting for you today. You have ${n(s.openTasks, 'open task', 'open tasks')}.` : `Er staat vandaag niets dringends voor u klaar. U hebt ${n(s.openTasks, 'open taak', 'open taken')}.`;
     const rows = [
       ...w.reviewQueue.slice(0, 4).map((r: { dossierId: string; dossierIdentity: string; subject: string }) => ({
         type: 'DOSSIER',
@@ -348,7 +370,7 @@ export class ChatService {
       ...w.tasks
         .filter((x) => x.overdue || x.dueDate)
         .slice(0, 6)
-        .map((x) => ({ type: 'TASK', id: x.id, identity: x.reference, title: x.title, meta: x.overdue ? (en ? 'overdue' : 'te laat') : `${en ? 'due' : 'termijn'} ${x.dueDate}`, date: x.dueDate, link: `/taken/${x.id}` })),
+        .map((x) => ({ type: 'TASK', id: x.id, identity: x.reference, title: x.title, meta: x.overdue ? (en ? 'overdue' : 'te laat') : en ? 'due' : 'termijn', date: x.dueDate, link: `/taken/${x.id}` })),
     ];
     return {
       intent: 'my-work',
@@ -425,4 +447,9 @@ export class ChatService {
     if (i && (await this.access.canViewItem(profile, i.id))) return { type: 'ITEM', id: i.id };
     return null;
   }
+}
+
+/** "1 taak", "3 taken". */
+function n(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
 }

@@ -537,7 +537,8 @@ export class AiService {
     const facts = this.itemFacts(item, proposals, lang);
     const builtin = {
       headline: `${item.registrationIdentity ?? (lang === 'en' ? 'Draft' : 'Concept')}: ${item.subject}`,
-      bullets: [...facts, ...sentences.map((s) => `“${excerpt(s.text, 260)}”`)],
+      // A sentence already given as the request is not quoted a second time.
+      bullets: [...facts, ...sentences.filter((s) => !proposals.requests.slice(0, 1).some((r) => s.text.startsWith(r.replace(/…$/, '')))).map((s) => `“${excerpt(s.text, 260)}”`)],
       keySentences: sentences,
     };
     const { text, engine } = await this.model(cfg, [item.classification], [
@@ -561,7 +562,7 @@ export class AiService {
     );
     if (p.requests.length) facts.push(en ? `Request: ${excerpt(p.requests[0], 220)}` : `Verzoek: ${excerpt(p.requests[0], 220)}`);
     const deadline = item.replyRequestedBy ?? p.deadlines[0]?.dueDate;
-    if (deadline) facts.push(en ? `A response is asked for by ${deadline}.` : `Er wordt een reactie gevraagd vóór ${longDutchDate(deadline)}.`);
+    if (deadline) facts.push(en ? `A response is asked for by ${readableDate(deadline)}.` : `Er wordt een reactie gevraagd vóór ${longDutchDate(deadline)}.`);
     if (!item.text.trim()) facts.push(en ? 'No readable text in the documents; summary based on the registration details.' : 'Geen leesbare tekst in de documenten; samenvatting op basis van de registratiegegevens.');
     return facts;
   }
@@ -749,7 +750,9 @@ export class AiService {
    * Which matters are at risk of missing their deadline, and why. Decision-
    * makers may look across everything they may see; others see their own.
    */
-  async risk(actor: Actor, scope: 'mine' | 'all' = 'mine') {
+  async risk(actor: Actor, scope: 'mine' | 'all' = 'mine', language: 'nl' | 'en' = 'nl') {
+    const en = language === 'en';
+    const days = (n: number, unit: 'werkdag' | 'dag') => (en ? `${n} ${unit === 'werkdag' ? 'working ' : ''}day${n === 1 ? '' : 's'}` : `${n} ${unit}${n === 1 ? '' : 'en'}`);
     const started = Date.now();
     await this.require('risk');
     const profile = await this.access.profile(actor.accountId);
@@ -803,47 +806,47 @@ export class AiService {
         wdLeft = await this.workingDays.workingDaysBetween(today, r.due_date);
         if (wdLeft < 0) {
           score = 100;
-          reasons.push(`${-wdLeft} werkdag${wdLeft === -1 ? '' : 'en'} over termijn`);
+          reasons.push(en ? `${days(-wdLeft, 'werkdag')} overdue` : `${days(-wdLeft, 'werkdag')} over termijn`);
         } else if (wdLeft <= 2) {
           score += 50;
-          reasons.push(wdLeft === 0 ? 'termijn verloopt vandaag' : `nog ${wdLeft} werkdag${wdLeft === 1 ? '' : 'en'}`);
+          reasons.push(wdLeft === 0 ? (en ? 'due today' : 'termijn verloopt vandaag') : en ? `${days(wdLeft, 'werkdag')} left` : `nog ${days(wdLeft, 'werkdag')}`);
         } else if (wdLeft <= 5) {
           score += 30;
-          reasons.push(`nog ${wdLeft} werkdagen`);
+          reasons.push(en ? `${days(wdLeft, 'werkdag')} left` : `nog ${days(wdLeft, 'werkdag')}`);
         } else if (wdLeft <= 10) {
           score += 10;
         }
         if (wdLeft >= 0 && wdLeft <= 5 && ['ACTIVE', 'RETURNED'].includes(r.processing_state)) {
           score += 15;
-          reasons.push(r.processing_state === 'RETURNED' ? 'teruggestuurd en nog niet opnieuw ingediend' : 'nog niet ter beoordeling aangeboden');
+          reasons.push(r.processing_state === 'RETURNED' ? (en ? 'returned and not yet resubmitted' : 'teruggestuurd en nog niet opnieuw ingediend') : en ? 'not yet submitted for review' : 'nog niet ter beoordeling aangeboden');
         }
       } else {
         score += 5;
-        reasons.push('geen termijn vastgesteld');
+        reasons.push(en ? 'no deadline set' : 'geen termijn vastgesteld');
       }
       const idle = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${r.last_activity}T12:00:00Z`)) / 86400000);
       if (idle >= 10) {
         score += idle >= 20 ? 20 : 12;
-        reasons.push(`${idle} dagen geen activiteit`);
+        reasons.push(en ? `no activity for ${days(idle, 'dag')}` : `${days(idle, 'dag')} geen activiteit`);
       }
       if (r.advice_late) {
         score += 20;
-        reasons.push(`${r.advice_late} adviesaanvra${r.advice_late === 1 ? 'ag' : 'gen'} over termijn`);
+        reasons.push(en ? `${r.advice_late} advice request${r.advice_late === 1 ? '' : 's'} overdue` : `${r.advice_late} adviesaanvra${r.advice_late === 1 ? 'ag' : 'gen'} over termijn`);
       } else if (r.advice_open && wdLeft !== null && wdLeft <= 5) {
         score += 10;
-        reasons.push('advies nog niet ontvangen');
+        reasons.push(en ? 'advice not yet received' : 'advies nog niet ontvangen');
       }
       if (r.tasks_late) {
         score += Math.min(30, 15 * r.tasks_late);
-        reasons.push(`${r.tasks_late} ta${r.tasks_late === 1 ? 'ak' : 'ken'} te laat`);
+        reasons.push(en ? `${r.tasks_late} task${r.tasks_late === 1 ? '' : 's'} late` : `${r.tasks_late} ta${r.tasks_late === 1 ? 'ak' : 'ken'} te laat`);
       }
       if (!r.responsible) {
         score += 10;
-        reasons.push('geen verantwoordelijke');
+        reasons.push(en ? 'no responsible official' : 'geen verantwoordelijke');
       }
       if (r.route_waiting_days !== null && r.route_waiting_days >= 5) {
         score += 10;
-        reasons.push(`goedkeuringsstap wacht ${r.route_waiting_days} dagen`);
+        reasons.push(en ? `approval step waiting for ${days(r.route_waiting_days, 'dag')}` : `goedkeuringsstap wacht ${days(r.route_waiting_days, 'dag')}`);
       }
       score = wdLeft !== null && wdLeft < 0 ? 100 : Math.min(99, score);
       const level = score >= 60 ? 'HIGH' : score >= 30 ? 'MEDIUM' : 'LOW';
@@ -888,7 +891,7 @@ export class AiService {
         replyRequestedBy: l.reply_requested_by,
         workingDaysLeft: wd,
         level: wd < 0 ? 'HIGH' : wd <= 3 ? 'HIGH' : 'MEDIUM',
-        reasons: [wd < 0 ? `antwoord ${-wd} werkdagen te laat` : `antwoord gevraagd binnen ${wd} werkdag${wd === 1 ? '' : 'en'}`],
+        reasons: [wd < 0 ? (en ? `reply ${days(-wd, 'werkdag')} late` : `antwoord ${days(-wd, 'werkdag')} te laat`) : en ? `reply asked within ${days(wd, 'werkdag')}` : `antwoord gevraagd binnen ${days(wd, 'werkdag')}`],
       });
     }
     const counts = {
@@ -898,7 +901,14 @@ export class AiService {
       letters: letters.length,
     };
     const output = { scope: all ? 'all' : 'mine', generatedOn: today, counts, dossiers: dossiers.slice(0, 50), letters };
-    const interactionId = await this.record(actor, 'risk', null, BUILTIN, `Termijnrisico (${all ? 'alles' : 'eigen werk'}): ${counts.high} hoog, ${counts.medium} middel`, { counts, top: dossiers.slice(0, 10).map((d) => d.dossierIdentity) }, started);
+    // Opening a page that shows the risk panel asks for it again; the same result within half an hour is recorded once.
+    const summary = `Termijnrisico (${all ? 'alles' : 'eigen werk'}): ${counts.high} hoog, ${counts.medium} middel`;
+    const [recent] = await this.dataSource.query(
+      `SELECT id FROM ai_interaction WHERE account_id = $1 AND feature = 'risk' AND prompt_summary = $2 AND created_at > now() - interval '30 minutes'
+        ORDER BY created_at DESC LIMIT 1`,
+      [actor.accountId, summary],
+    );
+    const interactionId: string = recent?.id ?? (await this.record(actor, 'risk', null, BUILTIN, summary, { counts, top: dossiers.slice(0, 10).map((d) => d.dossierIdentity) }, started));
     return { interactionId, engine: BUILTIN, ...output };
   }
 
@@ -1048,7 +1058,9 @@ export class AiService {
         id: r.id,
         identity: r.registration_identity,
         title: r.subject,
-        meta: `${r.party ?? '—'}, ${r.state === 'DRAFT' ? 'concept' : ({ INCOMING: 'inkomend', OUTGOING: 'uitgaand', INTERNAL: 'intern' } as Record<string, string>)[r.direction] ?? r.direction}`,
+        meta: [r.party, r.state === 'DRAFT' ? (r.party ? 'concept' : 'concept, nog in te vullen') : ({ INCOMING: 'inkomend', OUTGOING: 'uitgaand', INTERNAL: 'intern' } as Record<string, string>)[r.direction] ?? r.direction]
+          .filter(Boolean)
+          .join(', '),
         date: r.d,
         link: `/post/${r.id}`,
       })),
@@ -1296,7 +1308,7 @@ export function composeReply(item: ItemContext, p: IntakeProposals, signatory: s
   );
   lines.push('');
   if (request) {
-    lines.push(`In uw brief ${/verzoek|vraag|vraagt|verzoekt/i.test(request) ? 'verzoekt u' : 'brengt u het volgende naar voren'}: “${excerpt(request, 260)}”`);
+    lines.push(`${/verzoek|vraag|vraagt|verzoekt/i.test(request) ? 'Uw verzoek luidt' : 'In uw brief schrijft u'}: “${excerpt(request, 260)}”`);
     lines.push('');
   }
   lines.push('[Vermeld hier het besluit of het inhoudelijke antwoord.]');

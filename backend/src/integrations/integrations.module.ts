@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
@@ -52,6 +53,7 @@ class ReportDto {
   @IsOptional() @ValidateNested() @Type(() => ReporterDto) reporter?: ReporterDto;
   @IsOptional() @IsString() @MaxLength(300) location?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) occurredOn?: string;
+  @IsOptional() @IsISO8601() submittedAt?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => AttachmentDto) attachments?: AttachmentDto[];
 }
 

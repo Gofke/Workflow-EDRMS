@@ -69,7 +69,7 @@ export function TaskRow({ task, showAssignee = true }: { task: TaskView; showAss
               <Paperclip size={13} aria-hidden="true" /> {task.attachmentCount}
             </span>
           )}
-          {task.subtaskTotal > 0 && <span>{t(`${task.subtaskTotal - task.subtaskOpen}/${task.subtaskTotal} subtaken`, `${task.subtaskTotal - task.subtaskOpen}/${task.subtaskTotal} subtasks`)}</span>}
+          {task.subtaskTotal > 0 && <span>{t(`${task.subtaskTotal - task.subtaskOpen}/${task.subtaskTotal} deeltaken`, `${task.subtaskTotal - task.subtaskOpen}/${task.subtaskTotal} subtasks`)}</span>}
         </span>
       </span>
       <Due date={task.dueDate} done={done} />

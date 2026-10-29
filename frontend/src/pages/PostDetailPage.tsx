@@ -48,7 +48,7 @@ export default function PostDetailPage() {
   return (
     <>
       <PageHead
-        crumbs={[{ to: '/post', label: t('Post', 'Post') }]}
+        crumbs={[{ to: '/post', label: t('Post', 'Mail') }]}
         title={
           <span className="stack" style={{ gap: 8 }}>
             <span className="row" style={{ gap: 10 }}>
@@ -341,7 +341,7 @@ function DraftForm({ item, hasDocument, autoPropose, onChanged }: { item: ItemVi
               {row(t('Kenmerk afzender', 'Sender’s reference'), p.senderReference, f.senderReference)}
               {p.deadlines[0] && p.deadlines[0].dueDate !== f.replyRequestedBy && (
                 <div className="stack" style={{ gap: 2 }}>
-                  <span className="small muted">{t('Gevraagde termijn', 'Requested deadline')}</span>
+                  <span className="small muted">{t('Antwoord gevraagd vóór', 'Reply requested by')}</span>
                   <strong>{longDate(p.deadlines[0].dueDate, language)}</strong>
                   <span className="basis">
                     “{p.deadlines[0].phrase}”{p.deadlines[0].kind === 'RELATIVE_WORKING_DAYS' ? t(', in werkdagen met de Surinaamse feestdagen', ', in working days with Surinamese holidays') : ''}

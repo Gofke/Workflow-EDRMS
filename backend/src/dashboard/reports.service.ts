@@ -129,7 +129,7 @@ export class ReportsService {
             ],
             rows: [
               ...Object.entries(o.counts).map(([k, v]) => ({ label: labels[k] ?? k, value: v })),
-              { label: 'Op tijd afgerond (90 d) %', value: o.onTime.percentage ?? '—' },
+              { label: 'Op tijd afgerond, laatste 90 dagen', value: o.onTime.percentage === null || o.onTime.percentage === undefined ? '—' : `${o.onTime.percentage}%` },
               { label: 'Gemiddelde doorlooptijd (dagen)', value: o.averageHandlingDays ?? '—' },
             ],
           },

@@ -83,7 +83,7 @@ export default function DossierDetailPage() {
               <ProcessingBadge state={dossier.processingState} closed={closed} />
               {dossier.legalHold && (
                 <Badge tone="danger">
-                  <Lock size={12} /> {t('Juridische blokkade', 'Legal hold')}
+                  <Lock size={12} /> {t('Juridische bewaarplicht', 'Legal hold')}
                 </Badge>
               )}
             </span>
@@ -557,7 +557,7 @@ function Decision({ dossier, category, openAdvice, onChanged }: { dossier: Dossi
                 )}
                 {openAdvice > 0 && (
                   <Notice tone={client?.workflow.blockSubmitWithOpenAdvice ? 'danger' : 'warn'}>
-                    {t(`Er staat nog ${openAdvice} adviesaanvraag open.`, `${openAdvice} advice request(s) are still open.`)}
+                    {t(`Er ${openAdvice === 1 ? 'staat nog 1 adviesaanvraag' : `staan nog ${openAdvice} adviesaanvragen`} open.`, `${openAdvice} advice ${openAdvice === 1 ? 'request is' : 'requests are'} still open.`)}
                     {client?.workflow.blockSubmitWithOpenAdvice ? ` ${t('Indienen kan pas als het advies er is.', 'Submitting waits for the advice.')}` : ''}
                   </Notice>
                 )}
@@ -951,8 +951,8 @@ export function translateHeadline(text: string, language: string): string {
     [/^Advice given by (.+)$/, 'Advies gegeven door $1'],
     [/^Step approved: (.+)$/, 'Stap goedgekeurd: $1'],
     [/^Classification changed from (.+) to (.+)$/, 'Vertrouwelijkheid gewijzigd van $1 naar $2'],
-    [/^Legal hold placed$/, 'Juridische blokkade ingesteld'],
-    [/^Legal hold released$/, 'Juridische blokkade opgeheven'],
+    [/^Legal hold placed$/, 'Juridische bewaarplicht ingesteld'],
+    [/^Legal hold released$/, 'Juridische bewaarplicht opgeheven'],
   ];
   for (const [re, nl] of rules) if (re.test(text)) return text.replace(re, nl).replace(/(\d{4})-(\d{2})-(\d{2})/, '$3-$2-$1');
   return text;
@@ -998,7 +998,7 @@ function Timeline({ dossier }: { dossier: DossierView }) {
               <div className="small">
                 {e.actorName}
                 {e.onBehalfOfName ? ` ${t('namens', 'on behalf of')} ${e.onBehalfOfName}` : ''}
-                {e.detail ? <span className="muted"> — {e.detail}</span> : null}
+                {e.detail ? <span className="muted"> — {translateHeadline(e.detail, language)}</span> : null}
               </div>
             )}
             <div className="when">{dateTime(e.occurredAt, language)}</div>
@@ -1043,7 +1043,7 @@ function ArchiveTab({ dossier, category, categories, onChanged }: { dossier: Dos
               [t('Categorie', 'Category'), category ? `${category.code} — ${category.name}` : t('geen', 'none')],
               [t('Bewaartermijn', 'Retention period'), category?.retentionYears !== null && category?.retentionYears !== undefined ? t(`${category.retentionYears} jaar na sluiten`, `${category.retentionYears} years after closing`) : '—'],
               [t('Daarna', 'Then'), RETENTION_ACTION(t, category?.retentionAction ?? null)],
-              [t('Juridische blokkade', 'Legal hold'), dossier.legalHold ? <Badge key="h" tone="danger">{t('Ja, niets mag worden vernietigd', 'Yes, nothing may be destroyed')}</Badge> : t('Nee', 'No')],
+              [t('Juridische bewaarplicht', 'Legal hold'), dossier.legalHold ? <Badge key="h" tone="danger">{t('Ja, niets mag worden vernietigd', 'Yes, nothing may be destroyed')}</Badge> : t('Nee', 'No')],
             ]}
           />
           <div className="row">
@@ -1054,7 +1054,7 @@ function ArchiveTab({ dossier, category, categories, onChanged }: { dossier: Dos
             )}
             {canHold && (
               <button type="button" className="btn sm" onClick={() => setDialog('hold')}>
-                {dossier.legalHold ? <ShieldOff size={15} /> : <Lock size={15} />} {dossier.legalHold ? t('Blokkade opheffen', 'Release hold') : t('Juridische blokkade', 'Legal hold')}
+                {dossier.legalHold ? <ShieldOff size={15} /> : <Lock size={15} />} {dossier.legalHold ? t('Bewaarplicht opheffen', 'Release hold') : t('Juridische bewaarplicht', 'Legal hold')}
               </button>
             )}
             <button type="button" className="btn sm" onClick={() => void api.download(`/api/dossiers/${dossier.id}/archive-package`, `archiefpakket-${dossier.dossierIdentity}.zip`)}>
@@ -1065,7 +1065,7 @@ function ArchiveTab({ dossier, category, categories, onChanged }: { dossier: Dos
             <ol className="timeline">
               {retention.data!.holds.map((h, i) => (
                 <li key={i} className="danger">
-                  <strong>{h.action === 'SET' ? t('Blokkade ingesteld', 'Hold placed') : t('Blokkade opgeheven', 'Hold released')}</strong>
+                  <strong>{h.action === 'SET' ? t('Bewaarplicht ingesteld', 'Hold placed') : t('Bewaarplicht opgeheven', 'Hold released')}</strong>
                   <div className="small">
                     {h.actorName}: “{h.reason}”
                   </div>
@@ -1170,7 +1170,7 @@ function ArchiveTab({ dossier, category, categories, onChanged }: { dossier: Dos
       )}
       {dialog === 'hold' && (
         <Confirm
-          title={dossier.legalHold ? t('Juridische blokkade opheffen', 'Release legal hold') : t('Juridische blokkade instellen', 'Place a legal hold')}
+          title={dossier.legalHold ? t('Juridische bewaarplicht opheffen', 'Release legal hold') : t('Juridische bewaarplicht instellen', 'Place a legal hold')}
           confirmLabel={dossier.legalHold ? t('Opheffen', 'Release') : t('Instellen', 'Place')}
           danger={!dossier.legalHold}
           onClose={close}
@@ -1179,7 +1179,7 @@ function ArchiveTab({ dossier, category, categories, onChanged }: { dossier: Dos
           disabled={!reason.trim()}
           onConfirm={() => void action.run(async () => (await api.post(`/api/dossiers/${dossier.id}/legal-hold`, { action: dossier.legalHold ? 'RELEASED' : 'SET', reason }), close(), onChanged(), void retention.reload()))}
         >
-          <p className="small">{t('Zolang een blokkade geldt, kan de zaak niet worden vernietigd of overgebracht.', 'While a hold applies, the matter cannot be destroyed or transferred.')}</p>
+          <p className="small">{t('Zolang de bewaarplicht geldt, kan de zaak niet worden vernietigd of overgebracht.', 'While a hold applies, the matter cannot be destroyed or transferred.')}</p>
           <Field label={t('Reden', 'Reason')}>
             <textarea className="textarea" value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
@@ -1295,12 +1295,15 @@ export function AccessPanel({ type, id, classification, onChanged }: { type: 'it
           </p>
         ) : (
           <ul className="list" style={{ maxHeight: 460, overflowY: 'auto' }}>
-            {(views.data ?? []).map((v, i) => (
+            {groupViews(views.data ?? []).map((v, i) => (
               <li key={i} className="row between">
                 <span>
                   <Eye size={14} aria-hidden="true" /> <strong>{v.personName}</strong> <span className="small muted">{v.unit}</span>
                   <br />
-                  <span className="small muted">{v.kind === 'OPENED' ? t('geopend', 'opened') : v.kind === 'PREVIEWED' ? t('document bekeken', 'document viewed') : v.kind === 'DOWNLOADED' ? t('gedownload', 'downloaded') : v.kind.toLowerCase()}</span>
+                  <span className="small muted">
+                    {v.kind === 'OPENED' ? t('geopend', 'opened') : v.kind === 'PREVIEWED' ? t('document bekeken', 'document viewed') : v.kind === 'DOWNLOADED' ? t('gedownload', 'downloaded') : v.kind.toLowerCase()}
+                    {v.times > 1 ? t(`, ${v.times} keer in dit uur`, `, ${v.times} times within the hour`) : ''}
+                  </span>
                 </span>
                 <span className="small muted nowrap">{dateTime(v.occurredAt, language)}</span>
               </li>
@@ -1354,3 +1357,14 @@ export function AccessPanel({ type, id, classification, onChanged }: { type: 'it
 }
 
 export { CalendarClock, Dialog };
+
+/** Views by the same person, of the same kind, within an hour of each other, shown as one line with a count. */
+function groupViews<V extends { occurredAt: string; personName: string; kind: string }>(views: V[]): (V & { times: number })[] {
+  const out: (V & { times: number })[] = [];
+  for (const v of views) {
+    const prev = out[out.length - 1];
+    if (prev && prev.personName === v.personName && prev.kind === v.kind && Math.abs(Date.parse(prev.occurredAt) - Date.parse(v.occurredAt)) < 3600_000) prev.times++;
+    else out.push({ ...v, times: 1 });
+  }
+  return out;
+}

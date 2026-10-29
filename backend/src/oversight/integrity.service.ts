@@ -215,7 +215,7 @@ export class IntegrityService implements OnModuleInit, OnModuleDestroy {
     doc.image(qr, doc.page.margins.left, y, { width: 90 });
     doc.font('Bold').fontSize(9).text('Digitaal zegel', doc.page.margins.left + 105, y + 8);
     doc.font('Body').fontSize(8.5).text(`Zegelnummer ${sealId}`, doc.page.margins.left + 105, y + 22);
-    doc.text(url, doc.page.margins.left + 105, y + 36, { lineBreak: false });
+    doc.text(`Controleer de echtheid: scan de code of ga naar ${url}`, doc.page.margins.left + 105, y + 36, { width: usable - 105 });
     doc.y = y + 100;
     footer(doc, `${branding.organisationName}, integriteitsverklaring`);
     return pdfBuffer(doc);

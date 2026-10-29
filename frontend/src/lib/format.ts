@@ -67,7 +67,8 @@ export function dueLabel(due: string | null | undefined, lang: Language = 'nl'):
   if (!due) return { text: lang === 'en' ? 'no deadline' : 'geen termijn', tone: '' };
   const n = daysBetween(today(), due.slice(0, 10));
   const en = lang === 'en';
-  if (n < 0) return { text: en ? `${-n} day${n === -1 ? '' : 's'} overdue` : `${-n} dag${n === -1 ? '' : 'en'} te laat`, tone: 'late' };
+  // Past the deadline: say since when, not a count of days (the server counts working days; this screen should not contradict it).
+  if (n < 0) return { text: en ? `overdue since ${shortDate(due, lang)}` : `te laat sinds ${shortDate(due, lang)}`, tone: 'late' };
   if (n === 0) return { text: en ? 'due today' : 'vandaag', tone: 'soon' };
   if (n === 1) return { text: en ? 'tomorrow' : 'morgen', tone: 'soon' };
   if (n <= 5) return { text: en ? `in ${n} days` : `over ${n} dagen`, tone: 'soon' };
@@ -91,4 +92,15 @@ export function bytes(n: number | string): string {
 
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** A day and month only: "5 okt". */
+export function shortDate(value: string, lang: Language = 'nl'): string {
+  return date(value, lang).replace(/ \d{4}$/, '');
+}
+
+/** A number the way the reader writes it: 7,5 in Dutch, 7.5 in English. */
+export function num(n: number | null | undefined, lang: Language = 'nl', digits = 1): string {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+  return Number(n).toLocaleString(lang === 'en' ? 'en-GB' : 'nl-NL', { maximumFractionDigits: digits });
 }

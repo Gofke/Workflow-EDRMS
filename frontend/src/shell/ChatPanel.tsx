@@ -245,7 +245,7 @@ function CardView({ card, interactionId }: { card: Card; interactionId: string }
               </Link>
               <span className="xs muted">
                 {r.meta}
-                {r.date ? ` — ${date(r.date, language)}` : ''}
+                {r.date ? `${/^(termijn|due)$/.test(r.meta ?? '') ? ' ' : ' — '}${date(r.date, language)}` : ''}
               </span>
             </li>
           ))}

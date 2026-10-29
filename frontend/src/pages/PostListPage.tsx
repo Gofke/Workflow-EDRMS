@@ -60,8 +60,8 @@ export default function PostListPage() {
   return (
     <>
       <PageHead
-        title={t('Post', 'Post')}
-        lead={t('Alle binnenkomende, uitgaande en interne stukken die u mag zien. Een concept wordt pas een officieel stuk als het geregistreerd is.', 'Every incoming, outgoing and internal record you may see. A draft becomes an official record once it is registered.')}
+        title={t('Post', 'Mail')}
+        lead={t('Alle binnenkomende, uitgaande en interne stukken die u mag zien; vertrouwelijke stukken buiten uw werk ontbreken daarom in de nummering. Een concept wordt pas een officieel stuk als het geregistreerd is.', 'Every incoming, outgoing and internal record you may see; confidential records outside your work are therefore missing from the numbering. A draft becomes an official record once it is registered.')}
         actions={
           <>
             <button type="button" className="btn" onClick={() => setMailOpen(true)}>
@@ -368,7 +368,7 @@ function EmailIntakeDialog({ onClose }: { onClose: () => void }) {
         <ErrorNote error={error} />
         {result && (
           <div className="notice ok">
-            {t(`Ingelezen: ${result.captured.length} document(en) vastgelegd.`, `Taken in: ${result.captured.length} document(s) captured.`)}
+            {t(`Ingelezen: ${result.captured.length} ${result.captured.length === 1 ? 'document' : 'documenten'} vastgelegd.`, `Taken in: ${result.captured.length} ${result.captured.length === 1 ? 'document' : 'documents'} captured.`)}
             {result.skipped.length > 0 && ` ${t('Niet overgenomen:', 'Not taken:')} ${result.skipped.map((s) => `${s.filename} (${s.reason})`).join(', ')}`}
           </div>
         )}

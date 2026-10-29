@@ -62,6 +62,12 @@ and which assistant features are switched on.
   with one button, the moving ones are entered when the government announces them.
 - Push notifications need HTTPS and outbound access from the server to the
   browsers' push services.
+- In the demonstration no mail server or SMS gateway is connected: e-mail and
+  text messages are recorded in the outbox and marked "not sent". Connecting
+  them is configuration on the server.
+- In the demonstration two-step verification is not required, so every account
+  can sign in. For live use, switch it on for the Minister, the directors and
+  the administrators (Beheer → Instellingen).
 - The Task Management repository contained a committed Firebase service-account
   key. It is not used in Phase 3. **Revoke it in the Google Cloud console.**
 

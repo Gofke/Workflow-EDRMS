@@ -1,7 +1,8 @@
 import { AlertTriangle, CheckCircle2, Info, Loader2, Sparkles, X, XOctagon } from 'lucide-react';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { dueLabel, initials } from '../lib/format';
+import { date as formatDate, dueLabel, initials } from '../lib/format';
 import { CLASSIFICATION, PRIORITY, PROCESSING, TASK_STATUS } from '../lib/labels';
 import { usePrefs, useT } from '../lib/prefs';
 
@@ -81,7 +82,8 @@ export function ClassStamp({ level, always }: { level: string; always?: boolean 
 
 export function Due({ date, done }: { date: string | null | undefined; done?: boolean }) {
   const { language } = usePrefs();
-  if (done) return <span className="due">{date ? dueLabel(date, language).text : '—'}</span>;
+  // Finished work is not late any more: it shows the deadline it had, as a plain date.
+  if (done) return <span className="due">{date ? (language === 'en' ? `due ${formatDate(date, language)}` : `termijn ${formatDate(date, language)}`) : '—'}</span>;
   const d = dueLabel(date, language);
   return <span className={`due ${d.tone}`}>{d.text}</span>;
 }
@@ -89,8 +91,11 @@ export function Due({ date, done }: { date: string | null | undefined; done?: bo
 export function Confidence({ value }: { value: number }) {
   const t = useT();
   return (
-    <span className="confidence" title={t(`Zekerheid ${Math.round(value * 100)}%`, `Confidence ${Math.round(value * 100)}%`)}>
-      <span style={{ width: `${Math.round(value * 100)}%` }} />
+    <span className="confidence-wrap">
+      <span className="xs muted">{t(`${Math.round(value * 100)}% zeker`, `${Math.round(value * 100)}% sure`)}</span>
+      <span className="confidence" aria-hidden="true">
+        <span style={{ width: `${Math.round(value * 100)}%` }} />
+      </span>
     </span>
   );
 }
@@ -218,9 +223,11 @@ export function Proposal({ title, children, actions, engine }: { title?: ReactNo
   return (
     <div className="proposal">
       <div className="proposal-head">
-        <Sparkles size={16} aria-hidden="true" />
-        <span className="grow">{title ?? t('Voorstel van de assistent', 'Suggestion from the assistant')}</span>
-        {actions}
+        <span className="proposal-title">
+          <Sparkles size={16} aria-hidden="true" />
+          <span>{title ?? t('Voorstel van de assistent', 'Suggestion from the assistant')}</span>
+        </span>
+        {actions && <span className="proposal-actions">{actions}</span>}
       </div>
       <div className="proposal-body stack">
         {children}
@@ -314,7 +321,8 @@ export function Dialog({ title, children, footer, onClose, wide }: { title: Reac
       previous?.focus?.();
     };
   }, [onClose]);
-  return (
+  // Drawn at the top of the page, so the menu and the top bar are dimmed with the rest.
+  return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`dialog${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={id} ref={ref}>
         <div className="dialog-head">
@@ -326,7 +334,8 @@ export function Dialog({ title, children, footer, onClose, wide }: { title: Reac
         <div className="dialog-body">{children}</div>
         {footer && <div className="dialog-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

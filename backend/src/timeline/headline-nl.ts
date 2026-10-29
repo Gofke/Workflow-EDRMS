@@ -28,8 +28,8 @@ const RULES: [RegExp, string][] = [
   [/^Advice given by (.+)$/, 'Advies gegeven door $1'],
   [/^Step approved: (.+)$/, 'Stap goedgekeurd: $1'],
   [/^Classification changed from (.+) to (.+)$/, 'Vertrouwelijkheid gewijzigd van $1 naar $2'],
-  [/^Legal hold placed$/, 'Juridische blokkade ingesteld'],
-  [/^Legal hold released$/, 'Juridische blokkade opgeheven'],
+  [/^Legal hold placed$/, 'Juridische bewaarplicht ingesteld'],
+  [/^Legal hold released$/, 'Juridische bewaarplicht opgeheven'],
 ];
 
 export function dutchHeadline(text: string): string {

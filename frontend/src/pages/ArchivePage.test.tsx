@@ -40,4 +40,17 @@ describe('Retention decisions', () => {
     expect(await screen.findByText('Uitnodiging opening politiepost Lelydorp')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Besluiten' })).not.toBeInTheDocument();
   });
+
+  it('lists the matters under legal hold for the records manager, with the reason', async () => {
+    const s = server(me(['RECORDS_MANAGER']), {
+      'GET /api/casefiles/legal-holds': [
+        { id: 'd9', dossierIdentity: 'DOS-2026-0003', subject: 'Civiele procedure Bouwbedrijf Santo N.V. tegen de Staat', state: 'IN_PROGRESS', owningUnit: 'Juridische Zaken', responsibleName: 'S. Hiwat', categoryName: 'Procedures', holdReason: 'Rechtszaak loopt', heldSince: '2026-05-04T13:10:00Z', heldByName: 'J. Linger' },
+      ],
+    });
+    renderPage(<ArchivePage />, { path: '/archief?tab=bewaarplicht', route: '/archief' });
+    expect(await screen.findByText('Civiele procedure Bouwbedrijf Santo N.V. tegen de Staat')).toBeInTheDocument();
+    expect(screen.getByText(/Rechtszaak loopt/)).toBeInTheDocument();
+    expect(s.calls.some((c) => c.path.startsWith("/api/casefiles/legal-holds"))).toBe(true);
+    expect(s.calls.some((c) => /^\/api\/dossiers(\?|$)/.test(c.path))).toBe(false);
+  });
 });

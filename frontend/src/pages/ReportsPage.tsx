@@ -2,6 +2,7 @@ import { FileDown, FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, errorText } from '../lib/api';
+import { num } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
 import { ErrorNote, Loading, PageHead, Panel, Segmented, Tabs, useToast } from '../ui';
@@ -79,7 +80,7 @@ function Departments() {
                   <td>{u.open}</td>
                   <td style={u.overdue ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>{u.overdue}</td>
                   <td>{u.finalised}</td>
-                  <td>{u.avgHandlingDays === null ? '—' : t(`${u.avgHandlingDays} dagen`, `${u.avgHandlingDays} days`)}</td>
+                  <td>{u.avgHandlingDays === null ? '—' : t(`${num(u.avgHandlingDays, 'nl')} dagen`, `${num(u.avgHandlingDays, 'en')} days`)}</td>
                   <td>{u.onTimePct === null ? '—' : `${u.onTimePct}%`}</td>
                   <td>
                     {u.openTasks}

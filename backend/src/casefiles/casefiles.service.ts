@@ -220,6 +220,28 @@ export class CaseFilesService {
     );
   }
 
+  /** Matters under legal hold, open or closed, with who set the hold, when and why. */
+  async legalHolds() {
+    return this.dataSource.query(
+      `SELECT d.id, d.dossier_identity AS "dossierIdentity", d.subject, d.state,
+              u.name AS "owningUnit", rp.full_name AS "responsibleName",
+              c.code AS "categoryCode", c.name AS "categoryName",
+              h.reason AS "holdReason", h.occurred_at AS "heldSince", hp.full_name AS "heldByName"
+         FROM dossier d
+         LEFT JOIN organisational_unit u ON u.id = d.owning_unit_id
+         LEFT JOIN responsibility_assignment ra ON ra.dossier_id = d.id AND ra.superseded_at IS NULL
+         LEFT JOIN account ra_a ON ra_a.id = ra.responsible_account_id
+         LEFT JOIN person rp ON rp.id = ra_a.person_id
+         LEFT JOIN dossier_category c ON c.id = d.category_id
+         LEFT JOIN LATERAL (SELECT reason, occurred_at, actor_account_id FROM legal_hold_event e
+                             WHERE e.dossier_id = d.id AND e.action = 'SET' ORDER BY occurred_at DESC LIMIT 1) h ON true
+         LEFT JOIN account ha ON ha.id = h.actor_account_id
+         LEFT JOIN person hp ON hp.id = ha.person_id
+        WHERE d.legal_hold
+        ORDER BY h.occurred_at DESC NULLS LAST`,
+    );
+  }
+
   async decideRetention(actor: Actor, dossierId: string, decision: 'DESTROY' | 'TRANSFER' | 'RETAIN' | 'EXTEND', reason: string, extendUntil?: string) {
     const [d] = await this.dataSource.query(
       `SELECT d.*, c.retention_years FROM dossier d LEFT JOIN dossier_category c ON c.id = d.category_id WHERE d.id = $1`,

@@ -130,7 +130,8 @@ people and letters are invented. Every account uses the `SEED_PASSWORD`.
 | dualrole@juspol.test | Onder-Directeur and staff (S. Hiwat) |
 | assistant1@juspol.test, assistant2@juspol.test | Registry and Cabinet staff |
 | kartodikromo@, sabajo@, chin@, vlijter@, ramdin@, pengel@juspol.test | Heads of department |
-| wongsodikromo@, doekhie@juspol.test | Department staff |
+| wongsodikromo@, doekhie@, oemrawsingh@juspol.test | Department staff |
+| kensmil@juspol.test | Former staff member (account switched off) |
 | linger@juspol.test | Records manager (archive) |
 | auditor@juspol.test | Internal auditor |
 | sysadmin@juspol.test | System administrator (no access to record content) |

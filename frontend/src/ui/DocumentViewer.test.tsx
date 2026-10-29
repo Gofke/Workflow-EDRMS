@@ -13,7 +13,7 @@ describe('Document viewer', () => {
     renderPage(<DocumentViewer itemId="i1" documents={[DOC]} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Gelezen tekst' }));
     expect(await screen.findByText(/wij melden een tekort aan medicijnen/)).toBeInTheDocument();
-    expect(screen.getByText(/met tekstherkenning.*het document zelf blijft het stuk/)).toBeInTheDocument();
+    expect(screen.getByText(/automatisch herkend uit de scan.*het document zelf blijft het stuk/)).toBeInTheDocument();
   });
 
   it('says so plainly when a stored file no longer matches its fingerprint', async () => {

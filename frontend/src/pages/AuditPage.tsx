@@ -5,6 +5,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime } from '../lib/format';
 import { useApi, useDebounced } from '../lib/hooks';
 import { AUDIT_CATEGORY, AUDIT_TYPE } from '../lib/labels';
+import { auditSummaryNl } from '../lib/auditText';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
 import { Badge, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Tabs, useToast } from '../ui';
@@ -96,7 +97,7 @@ function LogTab() {
               series={[{ name: t('Handelingen', 'Actions'), color: 'var(--brand)', values: o.byDay.map((d) => d.n) }]}
             />
           </Panel>
-          <Panel title={t('Per soort', 'By kind')}>
+          <Panel title={t(`Per soort (${o.days} dagen)`, `By kind (${o.days} days)`)}>
             <div className="chips">
               <button type="button" className={`chip-btn ${category === '' ? 'on' : ''}`} aria-pressed={category === ''} onClick={() => setCategory('')}>
                 {t('Alles', 'All')}
@@ -121,7 +122,7 @@ function LogTab() {
       )}
       <Panel
         flush
-        title={list.data ? t(`${list.data.total} regels`, `${list.data.total} entries`) : t('Regels', 'Entries')}
+        title={list.data ? t(`${list.data.total} ${list.data.total === 1 ? 'regel' : 'regels'}${category || q || from || to ? '' : ' sinds de ingebruikname'}`, `${list.data.total} ${list.data.total === 1 ? 'entry' : 'entries'}${category || q || from || to ? '' : ' since go-live'}`) : t('Regels', 'Entries')}
         actions={
           <div className="row">
             <button type="button" className="btn sm" onClick={() => void download('csv')}>
@@ -186,8 +187,14 @@ function LogTab() {
                     <tr className="detail-row">
                       <td colSpan={5}>
                         <dl className="kv-inline">
-                          <dt>{t('Vastgelegd', 'Recorded')}</dt>
-                          <dd>{e.summary}</dd>
+                          <dt>{t('Omschrijving', 'Description')}</dt>
+                          <dd>{language === 'en' ? e.summary : auditSummaryNl(e.summary)}</dd>
+                          {language !== 'en' && auditSummaryNl(e.summary) !== e.summary && (
+                            <>
+                              <dt>{t('Vastgelegde tekst', 'Stored text')}</dt>
+                              <dd className="muted small">{e.summary}</dd>
+                            </>
+                          )}
                           {(e.previousValue || e.newValue) && (
                             <>
                               <dt>{t('Van → naar', 'From → to')}</dt>
@@ -298,7 +305,7 @@ function IntegrityTab() {
                 <strong>{t('Keten van het logboek', 'Log chain')}</strong>
                 <span>
                   {r.audit.chainOk
-                    ? t(`${r.audit.events} regels nagerekend; elke regel sluit aan op de vorige.`, `${r.audit.events} entries recomputed; every entry links to the previous one.`)
+                    ? t(`${r.audit.events} ${r.audit.events === 1 ? 'regel' : 'regels'} nagerekend; elke regel sluit aan op de vorige.`, `${r.audit.events} ${r.audit.events === 1 ? 'entry' : 'entries'} recomputed; every entry links to the previous one.`)
                     : t(`Breuk bij regel ${r.audit.broken.join(', ')}.`, `Break at entry ${r.audit.broken.join(', ')}.`)}
                 </span>
               </li>
@@ -306,7 +313,7 @@ function IntegrityTab() {
                 <strong>{t('Eerdere controles', 'Earlier checks')}</strong>
                 <span>
                   {r.anchors.ok
-                    ? t(`${r.anchors.checked} eerder vastgelegde ankerpunten komen nog overeen.`, `${r.anchors.checked} earlier anchor points still match.`)
+                    ? r.anchors.checked === 0 ? t('Dit is de eerste controle; er zijn nog geen eerdere ankerpunten.', 'This is the first check; there are no earlier anchor points yet.') : r.anchors.checked === 1 ? t('Het eerder vastgelegde ankerpunt komt nog overeen.', 'The earlier anchor point still matches.') : t(`Alle ${r.anchors.checked} eerder vastgelegde ankerpunten komen nog overeen.`, `All ${r.anchors.checked} earlier anchor points still match.`)
                     : t('Een eerder vastgelegd ankerpunt komt niet meer overeen: het logboek is achteraf veranderd.', 'An earlier anchor point no longer matches: the log was changed afterwards.')}
                 </span>
               </li>
@@ -314,8 +321,8 @@ function IntegrityTab() {
                 <strong>{t('Documenten', 'Documents')}</strong>
                 <span>
                   {r.documents.failed === 0
-                    ? t(`${r.documents.checked} bestanden zijn precies zoals ze zijn opgeslagen.`, `${r.documents.checked} files are exactly as they were stored.`)
-                    : t(`${r.documents.failed} van ${r.documents.checked} bestanden wijken af.`, `${r.documents.failed} of ${r.documents.checked} files differ.`)}
+                    ? r.documents.checked === 1 ? t('Het bestand is precies zoals het is opgeslagen.', 'The file is exactly as it was stored.') : t(`Alle ${r.documents.checked} bestanden zijn precies zoals ze zijn opgeslagen.`, `All ${r.documents.checked} files are exactly as they were stored.`)
+                    : t(`${r.documents.failed} van de ${r.documents.checked} bestanden ${r.documents.failed === 1 ? 'wijkt' : 'wijken'} af.`, `${r.documents.failed} of ${r.documents.checked} files differ.`)}
                   {r.documents.failures.map((f) => (
                     <span key={f.id} className="xs" style={{ display: 'block', color: 'var(--danger)' }}>
                       {f.name}: {f.problem}
@@ -326,7 +333,7 @@ function IntegrityTab() {
               <li className={r.seals.failed === 0 ? 'ok' : 'bad'}>
                 <strong>{t('Digitale zegels', 'Digital seals')}</strong>
                 <span>
-                  {r.seals.failed === 0 ? t(`${r.seals.checked} zegels zijn geldig.`, `${r.seals.checked} seals are valid.`) : t(`${r.seals.failed} zegels zijn ongeldig.`, `${r.seals.failed} seals are invalid.`)}
+                  {r.seals.failed === 0 ? (r.seals.checked === 1 ? t('Het zegel is geldig.', 'The seal is valid.') : t(`Alle ${r.seals.checked} zegels zijn geldig.`, `All ${r.seals.checked} seals are valid.`)) : t(`${r.seals.failed} ${r.seals.failed === 1 ? 'zegel is' : 'zegels zijn'} ongeldig.`, `${r.seals.failed} ${r.seals.failed === 1 ? 'seal is' : 'seals are'} invalid.`)}
                 </span>
               </li>
             </ul>

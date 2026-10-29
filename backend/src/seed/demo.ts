@@ -31,7 +31,8 @@ import { DataSource } from 'typeorm';
 import { closeSessionStore, createApp } from '../app-factory';
 import { hashPassword } from '../auth/password';
 import { canonicalJson } from '../core/seal.service';
-import { dateDaysAgo, fillerLetters, imagePdf, LetterSpec, letterPdf, LETTERS, scanOf } from './demo-content';
+import { findDeadlines } from '../ai/engine/dates';
+import { dateDaysAgo, fillerLetters, imagePdf, LetterSpec, letterDate, letterPdf, LETTERS, scanOf, soundMeterPng, workingDayBack } from './demo-content';
 import { ROLES, UNITS, USERS } from './seed';
 
 type Agent = ReturnType<typeof request.agent>;
@@ -69,8 +70,12 @@ const EXTRA_PEOPLE = [
  * timestamp written during the batch, and the dates the batch set relative to
  * "today", are moved by the same number of days.
  */
+const OFFICE_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+
 class Clock {
   private columns: { table: string; columns: string[] }[] = [];
+  /** What the current batch wrote: its log lines and notifications, whose texts quote its dates. */
+  private written: { s0: number; s1: number; notices: string[] } = { s0: 0, s1: 0, notices: [] };
   private dates: { table: string; column: string; id: string; timestamp?: boolean }[] = [];
 
   constructor(private readonly db: DataSource) {}
@@ -93,9 +98,13 @@ class Clock {
 
   async day(daysAgo: number, work: () => Promise<void>) {
     const [{ t0 }] = await this.db.query(`SELECT clock_timestamp() - interval '1 second' AS t0`);
+    const [{ s0 }] = await this.db.query(`SELECT coalesce(max(seq), 0) AS s0 FROM audit_event`);
     this.dates = [];
     await work();
     const [{ t1 }] = await this.db.query(`SELECT clock_timestamp() + interval '1 second' AS t1`);
+    const [{ s1 }] = await this.db.query(`SELECT coalesce(max(seq), 0) AS s1 FROM audit_event`);
+    const notices: { id: string }[] = await this.db.query(`SELECT id FROM notification WHERE created_at >= $1 AND created_at <= $2`, [t0, t1]);
+    this.written = { s0: Number(s0), s1: Number(s1), notices: notices.map((n) => n.id) };
     const days = Math.round(daysAgo);
     // The batch ran in a few seconds; its moments are spread over that day's
     // office hours (from 08:10 Suriname time), in the order they happened, so
@@ -105,7 +114,12 @@ class Clock {
                    ELSE least(25200, extract(epoch FROM (now() AT TIME ZONE 'America/Paramaribo') - (date_trunc('day', now() AT TIME ZONE 'America/Paramaribo') + interval '8 hours 10 minutes')) - 900) END AS span`,
       [days],
     );
-    if (days === 0 && Number(span) <= 600) return;
+    if (!(days === 0 && Number(span) <= 600)) await this.spread(t0, t1, days, Number(span));
+    await this.moveLater(days);
+  }
+
+  /** The batch's moments, spread over that day's office hours. */
+  private async spread(t0: Date, t1: Date, days: number, span: number) {
     // The first and last moment actually written in the batch bound the spread.
     let first: Date | null = null;
     let last: Date | null = null;
@@ -136,11 +150,45 @@ class Clock {
         ),
       );
     }
-    if (days === 0) return;
+  }
+
+  /** Dates the batch set as "today + n" move back with it. */
+  private async moveLater(days: number) {
     const shift = `make_interval(days => ${days})`;
     for (const d of this.dates) {
-      const by = d.timestamp ? shift : String(days);
-      await this.unguarded(d.table, () => this.db.query(`UPDATE "${d.table}" SET "${d.column}" = "${d.column}" - ${by} WHERE id = $1`, [d.id]));
+      // A deadline moves back with its batch, and never lands on a weekend: Saturday and Sunday become Monday.
+      const value = d.timestamp ? `"${d.column}" - ${shift}` : `("${d.column}" - ${days})`;
+      const deadline = !d.timestamp && /due_date$/.test(d.column) && d.column !== 'retention_due_date';
+      const set = deadline ? `${value} + CASE extract(isodow FROM ${value}) WHEN 6 THEN 2 WHEN 7 THEN 1 ELSE 0 END` : value;
+      if (days === 0 && !deadline) continue;
+      const before = d.timestamp ? null : (await this.db.query(`SELECT to_char("${d.column}", 'YYYY-MM-DD') AS v FROM "${d.table}" WHERE id = $1`, [d.id]))[0]?.v;
+      await this.unguarded(d.table, () => this.db.query(`UPDATE "${d.table}" SET "${d.column}" = ${set} WHERE id = $1`, [d.id]));
+      if (!before) continue;
+      const after = (await this.db.query(`SELECT to_char("${d.column}", 'YYYY-MM-DD') AS v FROM "${d.table}" WHERE id = $1`, [d.id]))[0]?.v;
+      if (after && after !== before) await this.retell(before, after);
+    }
+  }
+
+  /** The batch's own log lines and notifications quoted the date before it moved; they quote the moved date. */
+  private async retell(before: string, after: string) {
+    const nl = (iso: string) => iso.split('-').reverse().join('-');
+    for (const [a, b] of [[before, after], [nl(before), nl(after)]]) {
+      if (this.written.s1 > this.written.s0) {
+        await this.unguarded('audit_event', () =>
+          this.db.query(
+            `UPDATE audit_event SET summary = replace(summary, $1, $2), new_value = replace(new_value, $1, $2), previous_value = replace(previous_value, $1, $2)
+              WHERE seq > $3 AND seq <= $4 AND (summary LIKE '%' || $1 || '%' OR new_value LIKE '%' || $1 || '%' OR previous_value LIKE '%' || $1 || '%')`,
+            [a, b, this.written.s0, this.written.s1],
+          ),
+        );
+      }
+      if (this.written.notices.length) {
+        await this.db.query(`UPDATE notification SET title = replace(title, $1, $2), body = replace(body, $1, $2) WHERE id = ANY($3::uuid[]) AND (title LIKE '%' || $1 || '%' OR body LIKE '%' || $1 || '%')`, [
+          a,
+          b,
+          this.written.notices,
+        ]);
+      }
     }
   }
 
@@ -195,7 +243,8 @@ class Demo {
     let agent = this.agents.get(email);
     if (!agent) {
       agent = request.agent(this.server as never);
-      await ok(agent.post('/api/auth/login').send({ email, password: PASSWORD }), 200);
+      // Staff sign in from the ministry's office computers.
+      await ok(agent.post('/api/auth/login').set('User-Agent', OFFICE_BROWSER).send({ email, password: PASSWORD }), 200);
       this.agents.set(email, agent);
     }
     return agent;
@@ -229,8 +278,15 @@ class Demo {
           direction: 'INCOMING',
           subject: spec.subject,
           party: spec.from,
-          documentDate: dateDaysAgo(spec.daysAgo + 2),
+          documentDate: letterDate(spec.daysAgo),
           senderReference: spec.kenmerk,
+          // The reply date the letter asks for, as the clerk takes it over from the assistant's proposal
+          // (recent letters; older ones were answered within their matter before the field existed).
+          ...(() => {
+            if (spec.daysAgo > 21) return {};
+            const asked = findDeadlines(spec.body.join('\n'), letterDate(spec.daysAgo))[0]?.dueDate;
+            return asked ? { replyRequestedBy: asked } : {};
+          })(),
           ...(spec.classification ? { classification: spec.classification } : {}),
         };
     const draft = await ok(agent.post('/api/records/drafts').send(fields), 201);
@@ -238,9 +294,9 @@ class Demo {
       const scanned = await imagePdf(scanOf(pdf, 'pdf'));
       await ok(agent.post(`/api/records/${draft.id}/documents`).attach('file', scanned, { filename: 'scan-brief.pdf', contentType: 'application/pdf' }), 201);
     } else if (spec.photo) {
-      await ok(agent.post(`/api/records/${draft.id}/documents`).attach('file', scanOf(pdf, 'jpeg'), { filename: 'foto-brief.jpg', contentType: 'image/jpeg' }), 201);
+      await ok(agent.post(`/api/records/${draft.id}/documents`).attach('file', scanOf(pdf, 'photo'), { filename: 'foto-brief.jpg', contentType: 'image/jpeg' }), 201);
     } else {
-      await ok(agent.post(`/api/records/${draft.id}/documents`).attach('file', pdf, { filename: `${spec.key}.pdf`, contentType: 'application/pdf' }), 201);
+      await ok(agent.post(`/api/records/${draft.id}/documents`).attach('file', pdf, { filename: fileNameFor(spec), contentType: 'application/pdf' }), 201);
     }
     let result = { id: draft.id as string, identity: null as string | null, version: draft.version as number };
     if (!spec.draft) {
@@ -358,7 +414,16 @@ async function main() {
       demo.units.set(unit.code, u.id);
     }
     const people = [
-      ...USERS.map((u) => ({ email: u.email, fullName: u.fullName, job: u.jobPosition, unit: u.unit, roles: u.roles, disabled: u.disabled, head: false })),
+      // The test accounts get ordinary addresses here: a staff member and a former one.
+      ...USERS.map((u) => ({
+        email: ({ 'unauthorised@juspol.test': 'oemrawsingh@juspol.test', 'disabled@juspol.test': 'kensmil@juspol.test' } as Record<string, string>)[u.email] ?? u.email,
+        fullName: u.fullName,
+        job: u.jobPosition,
+        unit: u.unit,
+        roles: u.roles,
+        disabled: u.disabled,
+        head: false,
+      })),
     ];
     for (const p of people) {
       const [person] = await db.query(`INSERT INTO person (full_name, job_position) VALUES ($1, $2) RETURNING id`, [p.fullName, p.job]);
@@ -388,6 +453,21 @@ async function main() {
     await ok(admin.post('/api/calendar/holidays/load-suriname'), 200);
     const settings = (await ok(admin.get('/api/settings'), 200)) as Record<string, Record<string, unknown>>;
     await ok(admin.put('/api/settings/ai').send({ value: { ...settings.ai, features: Object.fromEntries(Object.keys(settings.ai.features as object).map((k) => [k, true])) } }), 200);
+    // Text messages are switched on; without an SMS gateway configured they are recorded, not sent.
+    await ok(admin.put('/api/settings/notifications').send({ value: { ...settings.notifications, smsEnabled: true } }), 200);
+    {
+      const director = await demo.as('directeur@juspol.test');
+      const prefs = await ok(director.get('/api/notifications/preferences'), 200);
+      const sms = ['REVIEW_REQUESTED', 'DEADLINE_ESCALATION', 'SECURITY_ALERT'];
+      await ok(
+        director.put('/api/notifications/preferences').send({
+          ...prefs,
+          mobileNumber: '+597 8512 340',
+          kinds: Object.fromEntries(Object.entries(prefs.kinds as Record<string, { email: boolean; sms: boolean; push: boolean }>).map(([k, c]) => [k, { ...c, sms: sms.includes(k) }])),
+        }),
+        200,
+      );
+    }
 
     const routes = [
       { key: 'standard', name: 'Standaard: Onder-Directeur, Directeur', steps: [{ role: 'ONDER_DIRECTEUR', label: 'Paraaf Onder-Directeur' }, { role: 'DIRECTEUR', label: 'Besluit Directeur' }] },
@@ -403,7 +483,7 @@ async function main() {
       { code: 'GR', name: 'Gratieverzoeken', description: 'Verzoeken om gratie of strafvermindering van gedetineerden en hun advocaten.', retentionYears: 20, retentionAction: 'TRANSFER', handlingWorkingDays: 30, route: 'minister' },
       { code: 'JI-PL', name: 'Plaatsing en overplaatsing gedetineerden', description: 'Overplaatsing van gedetineerden tussen inrichtingen, bezoekregelingen, verlof.', retentionYears: 10, retentionAction: 'DESTROY', handlingWorkingDays: 10 },
       { code: 'JI-TZ', name: 'Toezicht en inspectie inrichtingen', description: 'Inspectierapporten, toezicht op penitentiaire inrichtingen, medische zorg.', retentionYears: 20, retentionAction: 'TRANSFER', handlingWorkingDays: 20, classification: 'CONFIDENTIAL' },
-      { code: 'WG', name: 'Wetgeving en regelgeving', description: 'Wetsontwerpen, wetswijzigingen, staatsbesluiten en commentaar van De Nationale Assemblée.', retentionYears: 0, retentionAction: 'TRANSFER', handlingWorkingDays: 15, route: 'minister' },
+      { code: 'WG', name: 'Wetgeving en regelgeving', description: 'Wetsontwerpen, wetswijzigingen, staatsbesluiten en commentaar van De Nationale Assemblée. Blijvend te bewaren.', retentionYears: 20, retentionAction: 'TRANSFER', handlingWorkingDays: 15, route: 'minister' },
       { code: 'DNA', name: 'Vragen van De Nationale Assemblée', description: 'Schriftelijke en mondelinge vragen van leden van De Nationale Assemblée.', retentionYears: 20, retentionAction: 'TRANSFER', handlingWorkingDays: 10, route: 'minister' },
       { code: 'VZ', name: 'Verblijfsvergunningen en naturalisatie', description: 'Aanvragen voor verblijf, naturalisatie en nationaliteit.', retentionYears: 15, retentionAction: 'DESTROY', handlingWorkingDays: 20 },
       { code: 'IRH', name: 'Internationale rechtshulp en uitlevering', description: 'Rechtshulpverzoeken en uitleveringsverzoeken van andere staten.', retentionYears: 20, retentionAction: 'TRANSFER', handlingWorkingDays: 30, classification: 'CONFIDENTIAL' },
@@ -462,7 +542,11 @@ async function main() {
 
   // The story: what happened on which day, besides letters arriving.
   const events = new Map<number, (() => Promise<void>)[]>();
-  const on = (day: number, fn: () => Promise<void>) => events.set(day, [...(events.get(day) ?? []), fn]);
+  // Every day of the story is a working day: Saturday and Sunday move to the Friday before.
+  const on = (day: number, fn: () => Promise<void>) => {
+    const d = workingDayBack(day);
+    events.set(d, [...(events.get(d) ?? []), fn]);
+  };
   for (const s of specs) on(s.daysAgo, async () => void (await demo.letter(s)));
 
   const A1 = 'assistant1@juspol.test';
@@ -583,7 +667,7 @@ async function main() {
 
   // A request for mutual legal assistance, confidential, in English.
   on(57, async () => {
-    await demo.dossier('mla', JZH, 'Rechtshulpverzoek Nederland, fraudeonderzoek', 'IRH', ['mla'], 'CONFIDENTIAL');
+    await demo.dossier('mla', JZH, 'Rechtshulpverzoek Guyana, fraudeonderzoek', 'IRH', ['mla'], 'CONFIDENTIAL');
     await demo.assign('mla', DIR, DIR);
     await demo.dueDate('mla', DIR, 60);
     const t = await demo.task(JZH, { title: 'Bankgegevens opvragen via het Openbaar Ministerie', assigneeAccountId: demo.id(JZH), dossierId: demo.dossiers.get('mla'), dueIn: 30, priority: 'HIGH' });
@@ -612,6 +696,11 @@ async function main() {
     await demo.dossier('budget', FZH, 'Ontwerpbegroting 2027 Justitie en Politie', 'FIN', ['budget']);
     await demo.assign('budget', DIR, DIR);
     const agent = await demo.as(DIR);
+    // A claim against the State has to be provided for in the budget.
+    await ok(
+      agent.post(`/api/dossiers/${demo.dossiers.get('lawsuit')}/relations`).send({ relatedDossierId: demo.dossiers.get('budget'), relation: 'RELATED', note: 'Een eventuele schadevergoeding aan Bouwbedrijf Santo moet in de begroting 2027 worden voorzien.' }),
+      201,
+    );
     const id = demo.dossiers.get('budget')!;
     await ok(agent.post(`/api/dossiers/${id}/due-date`).send({ dueDate: '2026-11-30', version: await demo.dossierVersion(id), reason: 'Indiening bij Financiën en Planning' }), 200);
     const parent = await demo.task(FZH, { title: 'Begrotingsbijdragen van de afdelingen verzamelen', assigneeAccountId: demo.id(FZH), dossierId: id, dueIn: 50, priority: 'HIGH', checklist: ['Instructie doorsturen', 'Bijdragen ontvangen', 'Consolideren'] });
@@ -632,7 +721,7 @@ async function main() {
       'Notulen begrotingsoverleg',
       'Aanwezig: Sardjoe, Ramdin, Sabajo, Chin-A-Kwie',
       '- Ramdin stuurt de geconsolideerde begroting uiterlijk 20 november naar de Directeur',
-      '- Actie Sabajo: kosten medische zorg Santo Boma onderbouwen, spoed',
+      '- Actie Sabajo: kosten medische zorg Santo Boma onderbouwen vóór vrijdag, spoed',
       '- Chin-A-Kwie levert de raming voor de vreemdelingenbewaring volgende week aan',
       'Rondvraag: geen',
     ].join('\n');
@@ -669,6 +758,11 @@ async function main() {
     await ok(agent.post(`/api/dossiers/${demo.dossiers.get('inspection')}/advice`).send({ requestedFromAccountId: demo.id(FZH), question: 'Welk budget is beschikbaar voor uitbreiding van de medische zorg in Santo Boma in 2026 en 2027?', dueDate: demo.due(14) }), 201);
     const [a] = await db.query(`SELECT id FROM advice_request WHERE dossier_id = $1`, [demo.dossiers.get('inspection')]);
     clock.later('advice_request', 'due_date', a.id);
+    // The police head may read along: the police guard the prison while the medical wing is extended.
+    await ok(
+      (await demo.as(DIR)).post(`/api/access/dossiers/${demo.dossiers.get('inspection')}/grants`).send({ accountId: demo.id('pengel@juspol.test'), reason: 'De politie levert extra bewaking zolang de medische vleugel wordt uitgebreid.' }),
+      201,
+    );
     const t = await demo.task(JIH, { title: 'Plan van aanpak overbevolking afdelingen B en C', assigneeAccountId: demo.id(JI), dossierId: demo.dossiers.get('inspection'), dueIn: 38, priority: 'URGENT' });
     demo.ids.set('task-inspection', t);
   });
@@ -796,24 +890,27 @@ async function main() {
     const clerk = await demo.as(A2);
     await ok(clerk.post('/api/exchange/import').attach('package', await zip.generateAsync({ type: 'nodebuffer' }), 'pakket-biza.zip'), 201);
   });
-  const wijsamen = async (reference: string, subject: string, description: string, name: string) => {
-    const { qrPng } = await import('../core/pdf');
+  const wijsamen = async (reference: string, subject: string, description: string, name: string, email: string, daysAgo: number, meter: boolean) => {
+    const occurred = dateDaysAgo(daysAgo + 5);
+    const png = meter ? soundMeterPng(`${occurred.split('-').reverse().join('-')}  23:41`) : null;
     return ok(
       demo.http.post('/api/integrations/wijsamen/reports').set('X-Api-Key', wijsamenKey).send({
         reference,
         category: 'Klacht politieoptreden',
         subject,
         description,
-        reporter: { name, email: 'melder@example.sr' },
+        reporter: { name, email },
         location: 'Paramaribo-Noord',
-        occurredOn: dateDaysAgo(6),
-        attachments: [{ filename: 'foto-situatie.png', contentType: 'image/png', base64: (await qrPng(`WijSamen ${reference}`)).toString('base64') }],
+        occurredOn: occurred,
+        // Sent from the app early that morning; the ministry's record shows when it arrived.
+        submittedAt: `${dateDaysAgo(workingDayBack(daysAgo))}T07:52:00-03:00`,
+        attachments: png ? [{ filename: 'geluidsmeting.png', contentType: 'image/png', base64: png.toString('base64') }] : [],
       }),
       201,
     );
   };
   on(6, async () => {
-    const r = await wijsamen('WS-2026-004812', 'Onheus behandeld bij aangifte op politiepost Flora', 'Bij het doen van aangifte van een inbraak werd ik onheus behandeld en werd mijn aangifte eerst geweigerd.', 'R. Jong A Lim');
+    const r = await wijsamen('WS-2026-004812', 'Onheus behandeld bij aangifte op politiepost Flora', 'Bij het doen van aangifte van een inbraak werd ik onheus behandeld en werd mijn aangifte eerst geweigerd.', 'R. Jong A Lim', 'r.jongalim@example.sr', 6, false);
     const agent = await demo.as(A1);
     const [v] = await db.query(`SELECT version FROM correspondence_item WHERE id = $1`, [r.itemId]);
     await ok(agent.post(`/api/records/${r.itemId}/register`).send({ version: v.version }), 200);
@@ -822,8 +919,13 @@ async function main() {
     await demo.assign('complaint', OD, OD);
     await demo.dueDate('complaint', OD, 12);
   });
+  // Security: a former employee tries an old password five times; someone mistypes theirs.
+  on(2, async () => {
+    for (let i = 0; i < 5; i++) await demo.http.post('/api/auth/login').set('User-Agent', OFFICE_BROWSER).send({ email: 'kensmil@juspol.test', password: `Welkom202${i}!` });
+    for (let i = 0; i < 2; i++) await demo.http.post('/api/auth/login').set('User-Agent', OFFICE_BROWSER).send({ email: 'doekhie@juspol.test', password: 'Doekhie-2025' });
+  });
   on(1, async () => {
-    await wijsamen('WS-2026-005077', 'Geen reactie op klacht over geluidsoverlast', 'Ik heb drie weken geleden een klacht ingediend over geluidsoverlast naast de politiepost Latour, maar nooit een reactie gekregen.', 'mevr. A. Tjin');
+    await wijsamen('WS-2026-005077', 'Geen reactie op klacht over geluidsoverlast', 'Ik heb drie weken geleden een klacht ingediend over geluidsoverlast naast de politiepost Latour, maar nooit een reactie gekregen. De meting van vorige week stuur ik mee.', 'mevr. A. Tjin', 'a.tjin@example.sr', 1, true);
   });
 
   // Replies: the census answer and the invitation reply, registered and sealed.
@@ -911,3 +1013,16 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** The file name a sender would give the letter: a few words of the subject. */
+function fileNameFor(spec: LetterSpec): string {
+  const words = spec.subject
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((w) => w && !['de', 'het', 'een', 'van', 'voor', 'om', 'en', 'in', 'op', 'over', 'the', 'of', 'a', 'for'].includes(w))
+    .slice(0, 4);
+  return `${words.join('-') || 'brief'}.pdf`;
+}

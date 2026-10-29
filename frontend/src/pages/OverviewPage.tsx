@@ -2,7 +2,7 @@ import { FileDown, FileSpreadsheet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { ago, longDate } from '../lib/format';
+import { ago, date, longDate, num } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
@@ -22,7 +22,8 @@ interface Overview {
 }
 
 export function monthLabel(m: string, language: string): string {
-  return new Date(`${m}-01T12:00:00Z`).toLocaleDateString(language === 'en' ? 'en-GB' : 'nl-NL', { month: 'short', timeZone: 'UTC' }).replace('.', '');
+  // The same three-letter months everywhere in the system ("sep", not "sept").
+  return date(`${m}-01`, language === 'en' ? 'en' : 'nl').split(' ')[1];
 }
 
 export default function OverviewPage() {
@@ -31,7 +32,7 @@ export default function OverviewPage() {
   const { data, error } = useApi<Overview>('/api/dashboard/overview');
   const [risk, setRisk] = useState<{ counts: { high: number; medium: number }; dossiers: { dossierId: string; dossierIdentity: string; subject: string; level: string; reasons: string[]; responsible: string | null }[]; engine: EngineInfo } | null>(null);
   useEffect(() => {
-    if (ai('risk')) api.get<typeof risk>('/api/ai/risk?scope=all').then(setRisk).catch(() => null);
+    if (ai('risk')) api.get<typeof risk>(`/api/ai/risk?scope=all&language=${language}`).then(setRisk).catch(() => null);
   }, [ai]);
   if (error) return <ErrorNote error={error} />;
   if (!data) return <Loading lines={8} />;
@@ -56,10 +57,10 @@ export default function OverviewPage() {
         <div className="figures">
           <Figure value={c.openMatters} label={t('lopende zaken', 'open matters')} to="/zaken" />
           <Figure value={c.overdueMatters} label={t('over termijn', 'overdue')} to="/zaken?view=overdue" tone={c.overdueMatters ? 'alert' : undefined} />
-          <Figure value={c.dueThisWeek} label={t('termijn deze week', 'due this week')} tone={c.dueThisWeek ? 'warn' : undefined} />
+          <Figure value={c.dueThisWeek} label={t('termijn loopt af deze week', 'due this week')} tone={c.dueThisWeek ? 'warn' : undefined} />
           <Figure value={c.underReview} label={t('ter beoordeling', 'under review')} to="/zaken?view=review" />
           <Figure value={c.awaitingMinister} label={t('wacht op de Minister', 'awaiting the Minister')} />
-          <Figure value={data.onTime.percentage === null ? '—' : `${data.onTime.percentage}%`} label={t(`op tijd afgerond (90 dagen, ${data.onTime.total} zaken)`, `finished on time (90 days, ${data.onTime.total} matters)`)} tone={data.onTime.percentage !== null && data.onTime.percentage >= 80 ? 'good' : 'warn'} />
+          <Figure value={data.onTime.percentage === null ? '—' : `${data.onTime.percentage}%`} label={t(`op tijd afgerond (90 dagen, ${data.onTime.total} ${data.onTime.total === 1 ? 'zaak' : 'zaken'})`, `finished on time (90 days, ${data.onTime.total} ${data.onTime.total === 1 ? 'matter' : 'matters'})`)} tone={data.onTime.percentage !== null && data.onTime.percentage >= 80 ? 'good' : 'warn'} />
         </div>
         <div className="grid-2">
           <Panel title={t('Post en besluiten per maand', 'Post and decisions per month')}>
@@ -79,12 +80,12 @@ export default function OverviewPage() {
               {(
                 [
                   [c.registeredThisMonth, t('geregistreerd deze maand', 'registered this month')],
-                  [c.finalisedThisMonth, t('zaken afgerond deze maand', 'matters finished this month')],
-                  [data.averageHandlingDays ?? '—', t('gemiddelde doorlooptijd in dagen', 'average handling time in days')],
-                  [c.openTasks, t('open taken', 'open tasks')],
-                  [c.overdueTasks, t('taken over de termijn', 'tasks past their deadline'), c.overdueTasks > 0],
-                  [c.openAdvice, t('open adviesaanvragen', 'open advice requests')],
-                  [c.draftsWaiting, t('concepten nog te registreren', 'drafts still to register')],
+                  [c.finalisedThisMonth, t(c.finalisedThisMonth === 1 ? 'zaak afgerond deze maand' : 'zaken afgerond deze maand', c.finalisedThisMonth === 1 ? 'matter finished this month' : 'matters finished this month')],
+                  [num(data.averageHandlingDays, language), t('gemiddelde doorlooptijd in dagen', 'average handling time in days')],
+                  [c.openTasks, t(c.openTasks === 1 ? 'open taak' : 'open taken', c.openTasks === 1 ? 'open task' : 'open tasks')],
+                  [c.overdueTasks, t(c.overdueTasks === 1 ? 'taak over de termijn' : 'taken over de termijn', c.overdueTasks === 1 ? 'task past its deadline' : 'tasks past their deadline'), c.overdueTasks > 0],
+                  [c.openAdvice, t(c.openAdvice === 1 ? 'open adviesaanvraag' : 'open adviesaanvragen', c.openAdvice === 1 ? 'open advice request' : 'open advice requests')],
+                  [c.draftsWaiting, t(c.draftsWaiting === 1 ? 'concept nog te registreren' : 'concepten nog te registreren', c.draftsWaiting === 1 ? 'draft still to register' : 'drafts still to register')],
                 ] as [React.ReactNode, string, boolean?][]
               ).map(([v, label, alert]) => (
                 <div key={label} className={alert ? 'alert' : undefined}>
@@ -178,7 +179,7 @@ export default function OverviewPage() {
             {risk && (
               <Proposal title={t('Termijnrisico over het ministerie', 'Deadline risk across the ministry')} engine={risk.engine}>
                 <p className="small">
-                  {t(`${risk.counts.high} zaken met hoog en ${risk.counts.medium} met middel risico.`, `${risk.counts.high} matters at high and ${risk.counts.medium} at medium risk.`)}
+                  {t(`${risk.counts.high} ${risk.counts.high === 1 ? 'zaak' : 'zaken'} met hoog en ${risk.counts.medium} met middel risico.`, `${risk.counts.high} ${risk.counts.high === 1 ? 'matter' : 'matters'} at high and ${risk.counts.medium} at medium risk.`)}
                 </p>
                 <ul className="risk-list">
                   {risk.dossiers

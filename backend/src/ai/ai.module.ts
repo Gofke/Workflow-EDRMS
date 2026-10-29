@@ -185,8 +185,8 @@ export class AiController {
 
   @Get('risk')
   @RequireRoles(...BUSINESS_ROLES)
-  risk(@Query('scope') scope: string | undefined, @Req() request: Request) {
-    return this.ai.risk(actorFrom(request), scope === 'all' ? 'all' : 'mine');
+  risk(@Query('scope') scope: string | undefined, @Query('language') language: string | undefined, @Req() request: Request) {
+    return this.ai.risk(actorFrom(request), scope === 'all' ? 'all' : 'mine', language === 'en' ? 'en' : 'nl');
   }
 
   @Post('meeting-notes')

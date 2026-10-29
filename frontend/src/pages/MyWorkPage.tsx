@@ -45,7 +45,7 @@ export default function MyWorkPage() {
   const { data, error, loading } = useApi<MyWork>('/api/my-work');
   const [risk, setRisk] = useState<Risk | null>(null);
   useEffect(() => {
-    if (ai('risk')) api.get<Risk>('/api/ai/risk').then(setRisk).catch(() => null);
+    if (ai('risk')) api.get<Risk>(`/api/ai/risk?language=${language}`).then(setRisk).catch(() => null);
   }, [ai]);
 
   const hour = (new Date().getUTCHours() + 21) % 24;
@@ -56,7 +56,7 @@ export default function MyWorkPage() {
   return (
     <>
       <PageHead
-        title={`${greeting}, ${user?.personName}`}
+        title={`${greeting}, ${(user?.personName ?? "").replace(/(\b[A-Z]\.) /g, "$1\u00a0")}`}
         lead={data ? `${weekday} ${longDate(data.today, language)}. ${summarySentence(t, data)}` : undefined}
         actions={
           <>
@@ -75,11 +75,11 @@ export default function MyWorkPage() {
         <div className="stack" style={{ '--gap': '22px' } as React.CSSProperties}>
           <div className="figures" role="list" aria-label={t('Uw werk in getallen', 'Your work in figures')}>
             <Figure value={s.awaitingMyDecision} label={t('wacht op uw besluit', 'await your decision')} to="/goedkeuringen" tone={s.awaitingMyDecision ? 'warn' : undefined} />
-            <Figure value={s.overdueTasks} label={t('taken te laat', 'tasks overdue')} to="/taken?due=overdue" tone={s.overdueTasks ? 'alert' : undefined} />
-            <Figure value={s.dueThisWeek} label={t('taken deze week', 'tasks this week')} to="/taken?due=week" />
-            <Figure value={s.adviceToGive} label={t('adviezen te geven', 'advice to give')} to="/goedkeuringen" />
-            <Figure value={s.overdueMatters} label={t('van uw zaken over termijn', 'of your matters overdue')} to="/zaken?mine=1" tone={s.overdueMatters ? 'alert' : undefined} />
-            <Figure value={s.draftsToRegister} label={t('concepten te registreren', 'drafts to register')} to="/post?state=DRAFT" />
+            <Figure value={s.overdueTasks} label={t(s.overdueTasks === 1 ? 'taak te laat' : 'taken te laat', s.overdueTasks === 1 ? 'task overdue' : 'tasks overdue')} to="/taken?due=overdue" tone={s.overdueTasks ? 'alert' : undefined} />
+            <Figure value={s.dueThisWeek} label={t(s.dueThisWeek === 1 ? 'taak deze week' : 'taken deze week', s.dueThisWeek === 1 ? 'task this week' : 'tasks this week')} to="/taken?due=week" />
+            <Figure value={s.adviceToGive} label={t(s.adviceToGive === 1 ? 'advies te geven' : 'adviezen te geven', 'advice to give')} to="/goedkeuringen" />
+            <Figure value={s.overdueMatters} label={t(s.overdueMatters === 1 ? 'van uw zaken over termijn' : 'van uw zaken over termijn', 'of your matters overdue')} to="/zaken?mine=1" tone={s.overdueMatters ? 'alert' : undefined} />
+            <Figure value={s.draftsToRegister} label={t(s.draftsToRegister === 1 ? 'eigen concept te registreren' : 'eigen concepten te registreren', s.draftsToRegister === 1 ? 'own draft to register' : 'own drafts to register')} to="/post?state=DRAFT" />
           </div>
 
           <div className="split">

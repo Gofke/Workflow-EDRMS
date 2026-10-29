@@ -195,9 +195,11 @@ export class ApprovalsService {
     const state = await this.workflow.forward(actor, dossierId, nextReviewer, version, steps[i].label);
     const [d] = await this.dataSource.query(`SELECT dossier_identity, subject FROM dossier WHERE id = $1`, [dossierId]);
     await this.dataSource.transaction(async (manager) => {
+      // The step is approved the moment before the matter goes on to the next reviewer, so the history reads in that order.
       await manager.query(
-        `INSERT INTO route_step_decision (dossier_route_id, dossier_id, step_index, step_label, decision, actor_account_id, next_reviewer_account_id, reviewed_version, note)
-         VALUES ($1, $2, $3, $4, 'APPROVED', $5, $6, $7, $8)`,
+        `INSERT INTO route_step_decision (dossier_route_id, dossier_id, step_index, step_label, decision, actor_account_id, next_reviewer_account_id, reviewed_version, note, occurred_at)
+         VALUES ($1, $2, $3, $4, 'APPROVED', $5, $6, $7, $8,
+                 coalesce((SELECT max(occurred_at) FROM workflow_event WHERE dossier_id = $2) - interval '1 millisecond', now()))`,
         [route.id, dossierId, i, steps[i].label, actor.accountId, nextReviewer, version, note?.trim() || null],
       );
       await manager.query(`UPDATE dossier_route SET current_step = $2 WHERE id = $1`, [route.id, i + 1]);

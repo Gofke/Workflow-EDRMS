@@ -148,6 +148,14 @@ function SecurityTab() {
     const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : /curl/.test(ua) ? t('systeemkoppeling', 'system link') : '';
     return [br, os].filter(Boolean).join(t(' op ', ' on ')) || t('onbekend apparaat', 'unknown device');
   };
+  // An address inside the ministry's own network says so, rather than showing a bare number.
+  const where = (ip: string | null) => {
+    if (!ip) return '';
+    const bare = ip.replace(/^::ffff:/, '');
+    if (bare === '127.0.0.1' || bare === '::1') return t('intern netwerk', 'internal network');
+    if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(bare)) return `${t('intern netwerk', 'internal network')}, ${bare}`;
+    return bare;
+  };
   return (
     <div className="split">
       <div className="stack" style={{ '--gap': '20px' } as React.CSSProperties}>
@@ -295,7 +303,7 @@ function SecurityTab() {
                 </span>
                 <span className="xs muted">
                   {device(h.userAgent)}
-                  {h.ipAddress ? `, ${h.ipAddress}` : ''}
+                  {h.ipAddress ? `, ${where(h.ipAddress)}` : ''}
                 </span>
               </span>
             </li>
@@ -373,7 +381,9 @@ function NotificationsTab() {
         }
       >
         <p className="xs muted" style={{ padding: '0 20px', margin: '0 0 8px' }}>
-          {t('In het systeem (de bel) krijgt u altijd alles. Hier kiest u wat u daarnaast per e-mail, sms of pushmelding wilt.', 'In the system (the bell) you always get everything. Here you choose what you also want by e-mail, text message or push notification.')}
+          {smsOn
+            ? t('In het systeem (de bel) krijgt u altijd alles. Hier kiest u wat u daarnaast per e-mail, sms of pushmelding wilt.', 'In the system (the bell) you always get everything. Here you choose what you also want by e-mail, text message or push notification.')
+            : t('In het systeem (de bel) krijgt u altijd alles. Hier kiest u wat u daarnaast per e-mail of pushmelding wilt.', 'In the system (the bell) you always get everything. Here you choose what you also want by e-mail or push notification.')}
         </p>
         <ErrorNote error={error} />
         <div className="table-wrap">

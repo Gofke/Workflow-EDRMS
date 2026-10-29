@@ -2,13 +2,12 @@ import { Archive, Lock, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, errorText } from '../lib/api';
-import { date } from '../lib/format';
+import { date, dateTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { CLASSIFICATION, RETENTION_ACTION } from '../lib/labels';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
 import { Badge, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Stamp, Tabs, useToast } from '../ui';
-import type { DossierView } from './DossierDetailPage';
 
 type Tab = 'bewaren' | 'archiefplan' | 'bewaarplicht';
 
@@ -106,7 +105,7 @@ function RetentionTab() {
                   </td>
                   <td className="small">
                     {r.categoryName} <span className="xs muted">{r.categoryCode}</span>
-                    <div className="xs muted">{r.retentionYears === 0 ? t('geen bewaartermijn', 'no retention period') : t(`${r.retentionYears} jaar`, `${r.retentionYears} years`)}</div>
+                    <div className="xs muted">{r.retentionYears === 0 ? t('bewaren tot afhandeling', 'kept until handled') : t(`${r.retentionYears} jaar bewaren`, `kept ${r.retentionYears} years`)}</div>
                   </td>
                   <td className="small nowrap">{date(r.closedOn, language)}</td>
                   <td className="small nowrap">{date(r.retentionEndsOn, language)}</td>
@@ -177,7 +176,7 @@ function DecideDialog({ row, onClose, onDone }: { row: RetentionRow; onClose: ()
           {(
             [
               ['DESTROY', t('Vernietigen', 'Destroy'), t('De zaak wordt als vernietigd geregistreerd. Het logboek bewaart wie, wanneer en waarom.', 'The matter is recorded as destroyed. The log keeps who, when and why.')],
-              ['TRANSFER', t('Overbrengen naar het Nationaal Archief', 'Transfer to the National Archive'), t('Eerst het overdrachtspakket downloaden op de zaak (tab Archief).', 'First download the transfer package on the matter (Archive tab).')],
+              ['TRANSFER', t('Overbrengen naar het Nationaal Archief', 'Transfer to the National Archive'), t('Eerst het overdrachtspakket downloaden op de zaak (tab Archief en relaties).', 'First download the transfer package on the matter (Archive and relations tab).')],
               ['RETAIN', t('Blijvend bewaren', 'Keep permanently'), t('Voor zaken van blijvende waarde.', 'For matters of lasting value.')],
               ['EXTEND', t('Termijn verlengen', 'Extend the period'), t('Kies tot wanneer.', 'Choose until when.')],
             ] as const
@@ -264,7 +263,7 @@ function FilePlanTab() {
                       )}
                       {c.description && <div className="xs muted">{c.description}</div>}
                     </td>
-                    <td className="nowrap">{c.retentionYears === null ? '—' : c.retentionYears === 0 ? t('niet', 'no') : t(`${c.retentionYears} jaar`, `${c.retentionYears} years`)}</td>
+                    <td className="nowrap">{c.retentionYears === null ? '—' : c.retentionYears === 0 ? t('tot afhandeling', 'until handled') : t(`${c.retentionYears} jaar`, `${c.retentionYears} years`)}</td>
                     <td className="small">{RETENTION_ACTION(t, c.retentionAction)}</td>
                     <td className="nowrap small">{c.handlingWorkingDays ? t(`${c.handlingWorkingDays} werkdagen`, `${c.handlingWorkingDays} working days`) : '—'}</td>
                     <td>{c.dossierCount}</td>
@@ -378,44 +377,56 @@ function CategoryDialog({ value, routes, onClose, onSaved }: { value: Omit<Categ
 
 // ------------------------------------------------------------------ legal hold
 
+interface HoldRow { id: string; dossierIdentity: string; subject: string; state: string; owningUnit: string | null; responsibleName: string | null; categoryName: string | null; holdReason: string | null; heldSince: string | null; heldByName: string | null }
+
 function HoldTab() {
-  const { t } = usePrefs();
-  const { data, error } = useApi<DossierView[]>('/api/dossiers');
-  const held = (data ?? []).filter((d) => d.legalHold);
+  const { t, language } = usePrefs();
+  const { data, error } = useApi<HoldRow[]>('/api/casefiles/legal-holds');
   return (
     <div className="stack" style={{ '--gap': '16px' } as React.CSSProperties}>
       <p className="muted" style={{ margin: 0, maxWidth: '72ch' }}>
         {t('Een zaak onder juridische bewaarplicht kan niet worden vernietigd of overgebracht, wat het archiefplan ook zegt — bijvoorbeeld bij een lopende rechtszaak. Instellen en opheffen gebeurt op de zaak zelf, met een reden.', 'A matter under legal hold cannot be destroyed or transferred, whatever the file plan says — for example during a court case. Setting and releasing happens on the matter itself, with a reason.')}
       </p>
-      <ErrorNote error={error} />
-      <Panel flush>
-        {!data ? (
-          <Loading />
-        ) : held.length === 0 ? (
-          <Empty title={t('Geen zaken onder bewaarplicht', 'No matters under legal hold')} />
-        ) : (
-          <ul className="list">
-            {held.map((d) => (
-              <li key={d.id}>
-                <Link to={`/zaken/${d.id}?tab=archief`} className="list-link">
-                  <Archive size={18} style={{ marginTop: 3, color: 'var(--danger)', flex: 'none' }} aria-hidden="true" />
-                  <span className="grow stack" style={{ gap: 3 }}>
-                    <span className="list-title">{d.subject}</span>
-                    <span className="meta">
-                      <Stamp value={d.dossierIdentity} />
-                      <span>{d.owningUnit}</span>
-                      <span>{d.responsibleName ?? ''}</span>
+      {error ? (
+        <ErrorNote error={error} />
+      ) : (
+        <Panel flush>
+          {!data ? (
+            <Loading />
+          ) : data.length === 0 ? (
+            <Empty title={t('Geen zaken onder bewaarplicht', 'No matters under legal hold')} />
+          ) : (
+            <ul className="list">
+              {data.map((d) => (
+                <li key={d.id}>
+                  <Link to={`/zaken/${d.id}?tab=archief`} className="list-link">
+                    <Archive size={18} style={{ marginTop: 3, color: 'var(--danger)', flex: 'none' }} aria-hidden="true" />
+                    <span className="grow stack" style={{ gap: 3 }}>
+                      <span className="list-title">{d.subject}</span>
+                      <span className="meta">
+                        <Stamp value={d.dossierIdentity} />
+                        {d.owningUnit && <span>{d.owningUnit}</span>}
+                        {d.responsibleName && <span>{d.responsibleName}</span>}
+                        <span>{d.state === 'CLOSED' ? t('afgesloten', 'closed') : t('lopend', 'open')}</span>
+                      </span>
+                      {d.holdReason && (
+                        <span className="muted" style={{ fontSize: '0.92em' }}>
+                          {t('Reden', 'Reason')}: {d.holdReason}
+                          {d.heldByName ? ` — ${d.heldByName}` : ''}
+                          {d.heldSince ? `, ${dateTime(d.heldSince, language)}` : ''}
+                        </span>
+                      )}
                     </span>
-                  </span>
-                  <Badge tone="danger">
-                    <Lock size={12} /> {t('Bewaarplicht', 'Legal hold')}
-                  </Badge>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+                    <Badge tone="danger">
+                      <Lock size={12} /> {t('Bewaarplicht', 'Legal hold')}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
     </div>
   );
 }

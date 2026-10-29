@@ -97,7 +97,7 @@ export default function ExchangePage() {
                       <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
                         {checked.items.map((i, n) => (
                           <li key={n}>
-                            {i.registrationIdentity ?? ''} {i.subject} — {t(`${i.documents} document(en)`, `${i.documents} document(s)`)}
+                            {i.registrationIdentity ?? ''} {i.subject} — {t(`${i.documents} ${i.documents === 1 ? 'document' : 'documenten'}`, `${i.documents} ${i.documents === 1 ? 'document' : 'documents'}`)}
                           </li>
                         ))}
                       </ul>
@@ -131,7 +131,7 @@ export default function ExchangePage() {
             {!log.data ? (
               <Loading />
             ) : log.data.length === 0 ? (
-              <Empty title={t('Nog geen uitwisseling', 'No exchange yet')}>{t('Een zaak verstuurt u vanaf de zaak zelf, tab Archief.', 'You send a matter from the matter itself, Archive tab.')}</Empty>
+              <Empty title={t('Nog geen uitwisseling', 'No exchange yet')}>{t('Een zaak verstuurt u vanaf de zaak zelf, tab Archief en relaties.', 'You send a matter from the matter itself, Archive and relations tab.')}</Empty>
             ) : (
               <table className="table responsive">
                 <thead>
@@ -160,7 +160,7 @@ export default function ExchangePage() {
                         {l.partnerName ?? l.partnerCode} <span className="xs muted">{l.partnerCode}</span>
                       </td>
                       <td className="small">
-                        {l.dossierIdentity ? <Stamp value={l.dossierIdentity} /> : '—'} {t(`${l.items} stuk(ken)`, `${l.items} record(s)`)}
+                        {l.dossierIdentity ? <Stamp value={l.dossierIdentity} /> : '—'} <span className="nowrap">{t(`${l.items} ${l.items === 1 ? 'stuk' : 'stukken'}`, `${l.items} ${l.items === 1 ? 'record' : 'records'}`)}</span>
                         <div className="xs faint mono" title={l.packageHash}>
                           {l.packageHash.slice(0, 16)}…
                         </div>

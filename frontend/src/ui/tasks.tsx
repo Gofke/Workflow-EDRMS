@@ -14,6 +14,7 @@ interface Template {
   defaultPriority: string;
   defaultDueWorkingDays: number | null;
   checklist: string[];
+  subtasks?: { title: string; dueOffsetWorkingDays?: number | null }[];
   isActive: boolean;
 }
 
@@ -85,7 +86,7 @@ export function NewTaskDialog({ onClose, onCreated, itemId, dossierId, parentTas
 
   return (
     <Dialog
-      title={parentTaskId ? t('Subtaak toevoegen', 'Add subtask') : t('Nieuwe taak', 'New task')}
+      title={parentTaskId ? t('Deeltaak toevoegen', 'Add subtask') : t('Nieuwe taak', 'New task')}
       onClose={onClose}
       footer={
         <>
@@ -122,6 +123,33 @@ export function NewTaskDialog({ onClose, onCreated, itemId, dossierId, parentTas
             </select>
           </Field>
         ) : null}
+        {mode === 'template' &&
+          (() => {
+            const tp = templates.find((x) => x.id === templateId);
+            if (!tp) return null;
+            return (
+              <div className="template-preview">
+                <strong className="small">{t('Dit sjabloon maakt', 'This template creates')}</strong>
+                <ul className="small">
+                  <li>
+                    {t('Taak', 'Task')}: {tp.titleTemplate}
+                    {tp.defaultDueWorkingDays ? t(`, termijn ${tp.defaultDueWorkingDays} werkdagen`, `, due in ${tp.defaultDueWorkingDays} working days`) : ''}
+                  </li>
+                  {tp.checklist.length > 0 && (
+                    <li>
+                      {t('Controlepunten', 'Checklist')}: {tp.checklist.join(', ')}
+                    </li>
+                  )}
+                  {(tp.subtasks ?? []).map((st) => (
+                    <li key={st.title}>
+                      {t('Deeltaak', 'Subtask')}: {st.title}
+                      {st.dueOffsetWorkingDays ? t(` (binnen ${st.dueOffsetWorkingDays} werkdagen)`, ` (within ${st.dueOffsetWorkingDays} working days)`) : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
         <Field label={mode === 'template' ? t('Titel (anders volgt hij uit het sjabloon)', 'Title (otherwise taken from the template)') : t('Wat moet er gebeuren?', 'What needs doing?')}>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} required={mode === 'manual'} />
         </Field>

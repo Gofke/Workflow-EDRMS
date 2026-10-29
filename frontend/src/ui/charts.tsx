@@ -11,7 +11,7 @@ export interface Series {
 
 export function BarChart({ labels, series, height = 220, stacked = false, title }: { labels: string[]; series: Series[]; height?: number; stacked?: boolean; title: string }) {
   const width = 640;
-  const pad = { l: 34, r: 8, t: 10, b: 28 };
+  const pad = { l: 38, r: 8, t: 10, b: 32 };
   const innerW = width - pad.l - pad.r;
   const innerH = height - pad.t - pad.b;
   const totals = labels.map((_, i) => (stacked ? series.reduce((a, s) => a + (s.values[i] ?? 0), 0) : Math.max(...series.map((s) => s.values[i] ?? 0))));
@@ -20,6 +20,9 @@ export function BarChart({ labels, series, height = 220, stacked = false, title 
   const group = innerW / Math.max(labels.length, 1);
   const barW = stacked ? Math.min(34, group * 0.6) : Math.min(22, (group * 0.75) / series.length);
   const ticks = [0, nice / 2, nice];
+  // With many bars, name every few so the labels never run into each other; the last is always named.
+  const every = Math.max(1, Math.ceil(labels.length / 8));
+  const named = (i: number) => i === labels.length - 1 || (i % every === 0 && labels.length - 1 - i >= every * 0.6);
   return (
     <figure style={{ margin: 0 }}>
       <svg className="chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
@@ -50,9 +53,11 @@ export function BarChart({ labels, series, height = 220, stacked = false, title 
                 const x = x0 - (barW * series.length) / 2 + j * barW;
                 return <rect key={s.name} x={x + 1} y={pad.t + innerH - h} width={barW - 2} height={h} fill={s.color} rx={1.5}><title>{`${label} — ${s.name}: ${v}`}</title></rect>;
               })}
-              <text x={x0} y={height - 8} textAnchor="middle">
-                {label}
-              </text>
+              {named(i) && (
+                <text x={x0} y={height - 9} textAnchor="middle">
+                  {label}
+                </text>
+              )}
             </g>
           );
         })}

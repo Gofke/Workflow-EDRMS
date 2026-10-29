@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
+import { longDutchDate as longDate } from '../ai/engine/dates';
 import { footer, letterhead, newPdf, pdfBuffer, surinameDateTime } from '../core/pdf';
 import { canonicalJson } from '../core/seal.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -18,6 +19,8 @@ export interface WijSamenReport {
   reporter?: { name?: string; email?: string; phone?: string };
   location?: string;
   occurredOn?: string;
+  /** When the citizen sent it from the app; the receipt time is on the record itself. */
+  submittedAt?: string;
   attachments?: { filename: string; contentType: string; base64: string }[];
 }
 
@@ -86,8 +89,10 @@ export class WijSamenService {
       ['Onderwerp', report.subject],
       ['Melder', reporter || 'anoniem'],
       ['Locatie', report.location ?? '—'],
-      ['Datum voorval', report.occurredOn ?? '—'],
-      ['Ontvangen', `${surinameDateTime(new Date())} via ${client.name}`],
+      ['Datum voorval', report.occurredOn ? longDate(report.occurredOn) : '—'],
+      report.submittedAt && !Number.isNaN(Date.parse(report.submittedAt))
+        ? ['Verstuurd uit de app', surinameDateTime(report.submittedAt)]
+        : ['Ontvangen', `${surinameDateTime(new Date())} via ${client.name}`],
     ];
     for (const [k, v] of rows) {
       const y = doc.y;

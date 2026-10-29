@@ -365,7 +365,7 @@ function RiskTab() {
   const { t, language } = usePrefs();
   const { manager } = useSession();
   const [scope, setScope] = useState<'mine' | 'all'>(manager ? 'all' : 'mine');
-  const { data, error, loading } = useApi<Risk>(`/api/ai/risk?scope=${scope}`);
+  const { data, error, loading } = useApi<Risk>(`/api/ai/risk?scope=${scope}&language=${language}`);
   const levelTone = { HIGH: 'danger', MEDIUM: 'warn', LOW: 'ok' } as const;
   const levelText = (l: string) => ({ HIGH: t('Hoog', 'High'), MEDIUM: t('Middel', 'Medium'), LOW: t('Laag', 'Low') })[l] ?? l;
   return (
@@ -404,7 +404,7 @@ function RiskTab() {
             </div>
             <div className="figure">
               <span className="value">{data.counts.letters}</span>
-              <span className="label">{t('brieven zonder zaak', 'letters without a matter')}</span>
+              <span className="label">{t('brieven wachten op antwoord', 'letters awaiting a reply')}</span>
             </div>
           </div>
           <Panel flush>
@@ -444,7 +444,7 @@ function RiskTab() {
                         {d.dueDate ? date(d.dueDate, language) : '—'}
                         {d.workingDaysLeft !== null && (
                           <div className="xs" style={{ color: d.workingDaysLeft < 0 ? 'var(--danger)' : 'var(--muted)', fontWeight: d.workingDaysLeft < 0 ? 700 : 400 }}>
-                            {d.workingDaysLeft < 0 ? t(`${-d.workingDaysLeft} werkdagen te laat`, `${-d.workingDaysLeft} working days late`) : t(`nog ${d.workingDaysLeft} werkdagen`, `${d.workingDaysLeft} working days left`)}
+                            {d.workingDaysLeft < 0 ? t(`${-d.workingDaysLeft} ${d.workingDaysLeft === -1 ? 'werkdag' : 'werkdagen'} te laat`, `${-d.workingDaysLeft} working ${d.workingDaysLeft === -1 ? 'day' : 'days'} late`) : t(`nog ${d.workingDaysLeft} ${d.workingDaysLeft === 1 ? 'werkdag' : 'werkdagen'}`, `${d.workingDaysLeft} working ${d.workingDaysLeft === 1 ? 'day' : 'days'} left`)}
                           </div>
                         )}
                       </td>
@@ -455,7 +455,7 @@ function RiskTab() {
             )}
           </Panel>
           {data.letters.length > 0 && (
-            <Panel title={t('Brieven die nog bij een zaak moeten', 'Letters that still need a matter')} flush>
+            <Panel title={t('Brieven die op een antwoord wachten', 'Letters awaiting a reply')} flush>
               <ul className="list">
                 {data.letters.map((l) => (
                   <li key={l.itemId}>

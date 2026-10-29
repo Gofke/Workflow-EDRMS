@@ -256,7 +256,7 @@ function AccountDialog({ person, units, onClose, onSaved }: { person: PersonRow 
             ))}
           </div>
           <p className="xs muted" style={{ marginBottom: 0 }}>
-            {t('Systeembeheer en auditor geven geen toegang tot de inhoud van stukken.', 'System administration and auditor give no access to record content.')}
+            {t('De rollen Systeembeheerder en Auditor geven geen toegang tot de inhoud van stukken.', 'The System administrator and Auditor roles give no access to record content.')}
           </p>
         </fieldset>
         <ErrorNote error={error} />
@@ -542,7 +542,7 @@ function SettingsTab() {
                 <input className="input mono" value={String(v.accentColor)} onChange={(e) => set({ accentColor: e.target.value })} />
               </span>
             </Field>
-            <Field label={t('Briefhoofd (één regel per regel)', 'Letterhead (one line per line)')} className="wide">
+            <Field label={t('Briefhoofd (elke regel apart)', 'Letterhead (each line separately)')} className="wide">
               <textarea className="textarea" rows={3} value={((v.letterheadLines as string[]) ?? []).join('\n')} onChange={(e) => set({ letterheadLines: e.target.value.split('\n').slice(0, 6) })} />
             </Field>
             <Field label={t('Ondertekening', 'Signatory')} className="wide">
@@ -560,10 +560,10 @@ function SettingsTab() {
             <Field label={t('Escaleren na (werkdagen te laat)', 'Escalate after (working days late)')}>
               <input className="input" type="number" min={0} value={String(v.escalateAfterWorkingDays)} onChange={(e) => set({ escalateAfterWorkingDays: num(e.target.value) })} />
             </Field>
-            <Field label={t('Tweede escalatie na nog', 'Second escalation after another')}>
+            <Field label={t('Tweede escalatie na nog (werkdagen)', 'Second escalation after another (working days)')}>
               <input className="input" type="number" min={1} value={String(v.secondEscalationAfterWorkingDays)} onChange={(e) => set({ secondEscalationAfterWorkingDays: num(e.target.value) })} />
             </Field>
-            <Field label={t('Standaard afhandeltermijn post', 'Standard handling time for post')}>
+            <Field label={t('Standaard afhandeltermijn post (werkdagen)', 'Standard handling time for post (working days)')}>
               <input className="input" type="number" min={1} value={String(v.defaultIncomingWorkingDays)} onChange={(e) => set({ defaultIncomingWorkingDays: num(e.target.value) })} />
             </Field>
           </div>
@@ -579,7 +579,7 @@ function SettingsTab() {
               <Field label={t('Blokkeren na mislukte pogingen', 'Lock after failed attempts')}>
                 <input className="input" type="number" min={3} max={20} value={String(v.lockoutThreshold)} onChange={(e) => set({ lockoutThreshold: num(e.target.value) })} />
               </Field>
-              <Field label={t('Blokkade duurt (minuten)', 'Lock lasts (minutes)')}>
+              <Field label={t('Account geblokkeerd voor (minuten)', 'Account locked for (minutes)')}>
                 <input className="input" type="number" min={1} value={String(v.lockoutMinutes)} onChange={(e) => set({ lockoutMinutes: num(e.target.value) })} />
               </Field>
             </div>
@@ -639,7 +639,7 @@ function SettingsTab() {
           </div>
         )}
       </SettingSection>
-      <SettingSection title={t('Burgers en oefenen', 'Citizens and training')} keyName="publicTracking" all={data} onSaved={saved}>
+      <SettingSection title={t('Volgen door burgers', 'Tracking by citizens')} keyName="publicTracking" all={data} onSaved={saved}>
         {(v, set) => (
           <label className="check">
             <input type="checkbox" checked={Boolean(v.enabled)} onChange={(e) => set({ enabled: e.target.checked })} />
@@ -861,7 +861,7 @@ function HolidaysTab() {
         <Panel title={t('Feestdag toevoegen', 'Add a holiday')}>
           <div className="stack">
             <p className="small muted" style={{ marginTop: 0 }}>
-              {t('Islamitische en hindoestaanse feestdagen vallen elk jaar anders. Voer ze in zodra de regering de data bekendmaakt.', 'Islamic and Hindu holidays fall differently each year. Enter them as soon as the government announces the dates.')}
+              {t('Islamitische en Hindoestaanse feestdagen vallen elk jaar anders. Voer ze in zodra de regering de data bekendmaakt.', 'Islamic and Hindu holidays fall differently each year. Enter them as soon as the government announces the dates.')}
             </p>
             <div className="form-grid">
               <Field label={t('Datum', 'Date')}>
@@ -1301,7 +1301,7 @@ function MessagesTab() {
   };
   const status: Record<string, [string, string, 'ok' | 'warn' | 'danger' | 'neutral']> = {
     SENT: ['Verstuurd', 'Sent', 'ok'],
-    LOGGED: ['Vastgelegd (geen server)', 'Logged (no server)', 'neutral'],
+    LOGGED: ['Vastgelegd, niet verzonden', 'Recorded, not sent', 'neutral'],
     QUEUED: ['Wacht', 'Waiting', 'warn'],
     FAILED: ['Mislukt', 'Failed', 'danger'],
   };
@@ -1323,7 +1323,7 @@ function MessagesTab() {
         }
       >
         <p className="xs muted" style={{ padding: '0 20px', margin: '0 0 8px' }}>
-          {t('Zonder ingestelde mailserver of SMS-gateway worden berichten alleen vastgelegd, zodat niets verloren gaat. Zet SMTP_HOST of SMS_PROVIDER (met SMS_HTTP_URL) in de serverconfiguratie om ze echt te versturen.', 'Without a configured mail server or SMS gateway, messages are only logged, so nothing is lost. Set SMTP_HOST or SMS_PROVIDER (with SMS_HTTP_URL) in the server configuration to really send them.')}
+          {t('Er is nog geen mailserver of sms-dienst gekoppeld. Berichten worden daarom vastgelegd en niet verzonden, zodat niets verloren gaat. De koppeling wordt op de server ingesteld (zie de installatiehandleiding); daarna gaan nieuwe berichten echt de deur uit.', 'No mail server or text-message service is connected yet. Messages are therefore recorded, not sent, so nothing is lost. The connection is set on the server (see the installation guide); from then on new messages really go out.')}
         </p>
         {!outbox.data ? (
           <Loading />

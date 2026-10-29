@@ -172,7 +172,7 @@ function TextView({ itemId, doc }: { itemId: string; doc: DocumentRow }) {
     <div className="stack">
       <p className="small muted">
         {text.status === 'EXTRACTED'
-          ? t(`Tekst gelezen uit het document${text.method?.includes('OCR') ? ' met tekstherkenning' : ''}${text.engine ? ` (${text.engine})` : ''}. Dit is een hulpmiddel om te zoeken; het document zelf blijft het stuk.`, `Text read from the document${text.method?.includes('OCR') ? ' by text recognition' : ''}${text.engine ? ` (${text.engine})` : ''}. It helps with finding; the document itself remains the record.`)
+          ? t(`${readHow(text, 'nl')} Dit is een hulpmiddel om te zoeken; het document zelf blijft het stuk.`, `${readHow(text, 'en')} It helps with finding; the document itself remains the record.`)
           : text.status === 'EMPTY'
             ? t('Het document is gelezen, maar er is geen tekst in gevonden.', 'The document was read, but no text was found in it.')
             : text.status === 'SKIPPED'
@@ -183,4 +183,15 @@ function TextView({ itemId, doc }: { itemId: string; doc: DocumentRow }) {
       {text.text && <div className="letter-text small" style={{ maxHeight: 520, overflowY: 'auto', maxWidth: 'none' }}>{text.text}</div>}
     </div>
   );
+}
+
+/** How the text was read, in words: "Tekst herkend uit de scan (Nederlands en Engels, 1 pagina)." */
+function readHow(text: { method?: string | null; engine?: string | null }, lang: 'nl' | 'en'): string {
+  const ocr = Boolean(text.method?.includes('OCR') || /tesseract/i.test(text.engine ?? ''));
+  const pages = Number(/(\d+) page/.exec(text.engine ?? '')?.[1] ?? 0);
+  const langs = /\((nld|eng)(\+(nld|eng))?\)/.exec(text.engine ?? '') ? (lang === 'en' ? 'Dutch and English' : 'Nederlands en Engels') : '';
+  const pageText = pages ? (lang === 'en' ? `${pages} page${pages === 1 ? '' : 's'}` : `${pages} ${pages === 1 ? 'pagina' : "pagina's"}`) : '';
+  const detail = [langs, pageText].filter(Boolean).join(', ');
+  if (ocr) return lang === 'en' ? `Text recognised from the scan or photo${detail ? ` (${detail})` : ''}.` : `Tekst automatisch herkend uit de scan of foto${detail ? ` (${detail})` : ''}.`;
+  return lang === 'en' ? 'Text taken from the document itself.' : 'Tekst overgenomen uit het document zelf.';
 }

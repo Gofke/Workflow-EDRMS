@@ -67,7 +67,7 @@ export default function DossierListPage() {
       />
       <div className="filters">
         <Field label={t('Zoeken in de lijst', 'Filter the list')}>
-          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Nummer, onderwerp of naam', 'Number, subject or name')} />
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Nummer of woord', 'Number or word')} />
         </Field>
         <Segmented
           label={t('Weergave', 'View')}
@@ -124,7 +124,7 @@ export default function DossierListPage() {
                         <ClassStamp level={d.classification} />
                         {d.legalHold && (
                           <Badge tone="danger">
-                            <Lock size={11} /> {t('blokkade', 'hold')}
+                            <Lock size={11} /> {t('bewaarplicht', 'legal hold')}
                           </Badge>
                         )}
                       </div>

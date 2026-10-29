@@ -70,6 +70,12 @@ export class FilePlanController {
     return this.casefiles.saveCategory(actorFrom(request), id, dto);
   }
 
+  @Get('legal-holds')
+  @RequireRoles(...HOLD_ROLES, 'ONDER_DIRECTEUR', 'AUDITOR')
+  legalHolds() {
+    return this.casefiles.legalHolds();
+  }
+
   @Get('retention')
   @RequireRoles(...RETENTION_ROLES, 'MINISTER', 'DIRECTEUR', 'AUDITOR')
   retention(@Query('filter') filter?: string) {

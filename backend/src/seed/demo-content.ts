@@ -40,6 +40,22 @@ export function dateDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** A ministry does not work at weekends: a day that falls on one moves back to the Friday before. */
+export function workingDayBack(n: number): number {
+  if (n <= 0) return n;
+  let x = n;
+  for (;;) {
+    const w = new Date(`${dateDaysAgo(x)}T12:00:00Z`).getUTCDay();
+    if (w !== 0 && w !== 6) return x;
+    x++;
+  }
+}
+
+/** The date written on a letter that arrived n days ago: two working days earlier. */
+export function letterDate(arrivedDaysAgo: number): string {
+  return dateDaysAgo(workingDayBack(arrivedDaysAgo + 2));
+}
+
 function longDate(iso: string, en = false): string {
   const [y, m, d] = iso.split('-').map(Number);
   return en ? `${MONTHS_EN[m - 1]} ${d}, ${y}` : `${d} ${MONTHS[m - 1]} ${y}`;
@@ -47,7 +63,7 @@ function longDate(iso: string, en = false): string {
 
 export async function letterPdf(spec: LetterSpec): Promise<Buffer> {
   const en = spec.language === 'en';
-  const dated = dateDaysAgo(spec.daysAgo + 2);
+  const dated = letterDate(spec.daysAgo);
   const doc = newPdf({ title: spec.subject });
   doc.font('Bold').fontSize(15).fillColor('#1f2937').text(spec.from);
   doc.font('Body').fontSize(9).fillColor('#4b5563');
@@ -77,14 +93,69 @@ export async function letterPdf(spec: LetterSpec): Promise<Buffer> {
 }
 
 /** A letter as if it came off the scanner: an image of the page, no text layer. */
-export function scanOf(pdf: Buffer, kind: 'pdf' | 'jpeg'): Buffer {
+export function scanOf(pdf: Buffer, kind: 'pdf' | 'jpeg' | 'photo'): Buffer {
   const dir = mkdtempSync(join(tmpdir(), 'scan-'));
   try {
     writeFileSync(join(dir, 'in.pdf'), pdf);
+    if (kind === 'photo') {
+      const photo = phonePhoto(dir);
+      if (photo) return photo;
+      kind = 'jpeg';
+    }
     execFileSync('pdftoppm', ['-r', '150', '-gray', '-f', '1', '-l', '1', kind === 'jpeg' ? '-jpeg' : '-png', join(dir, 'in.pdf'), join(dir, 'page')]);
-    const image = readFileSync(join(dir, kind === 'jpeg' ? 'page-1.jpg' : 'page-1.png'));
-    if (kind === 'jpeg') return image;
-    return image;
+    return readFileSync(join(dir, kind === 'jpeg' ? 'page-1.jpg' : 'page-1.png'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The first page as a clerk's phone would photograph it on a desk: in colour,
+ * slightly skewed, with a shadow, uneven light and sensor noise. Needs
+ * ImageMagick; without it the caller falls back to a plain JPEG.
+ */
+function phonePhoto(dir: string): Buffer | null {
+  try {
+    execFileSync('pdftoppm', ['-r', '110', '-png', '-f', '1', '-l', '1', join(dir, 'in.pdf'), join(dir, 'page')]);
+    const page = join(dir, 'page-1.png');
+    const [w, h] = execFileSync('identify', ['-format', '%w %h', page]).toString().trim().split(' ').map(Number);
+    const out = join(dir, 'photo.jpg');
+    execFileSync('convert', [
+      page, '-fill', '#efe9dc', '-colorize', '7%',
+      '(', '+clone', '-background', '#000', '-shadow', '55x14+14+18', ')', '+swap', '-background', 'none', '-layers', 'merge', '+repage',
+      '-bordercolor', 'none', '-border', '70', '-background', '#5b4636', '-flatten',
+      '-virtual-pixel', 'background', '-background', '#5b4636',
+      '-distort', 'Perspective', `0,0 40,30  ${w + 139},0 ${w + 100},12  0,${h + 139} 18,${h + 120}  ${w + 139},${h + 139} ${w + 125},${h + 139}`,
+      '-gravity', 'center', '-crop', '94%x95%+0+0', '+repage',
+      '(', '+clone', '-fill', '#ffffff', '-colorize', '100', '-background', '#6a6a6a', '-vignette', '0x260+0+0', ')', '-compose', 'multiply', '-composite',
+      '-blur', '0x0.5', '-attenuate', '0.3', '+noise', 'Gaussian', '-resize', '85%', '-quality', '78', out,
+    ]);
+    return readFileSync(out);
+  } catch {
+    return null;
+  }
+}
+
+/** A screenshot of a sound-meter app, as a citizen attaches it to a noise complaint. Needs ImageMagick. */
+export function soundMeterPng(when: string): Buffer | null {
+  const dir = mkdtempSync(join(tmpdir(), 'meter-'));
+  try {
+    const out = join(dir, 'meter.png');
+    execFileSync('convert', [
+      '-size', '720x1280', 'gradient:#10151f-#1b2433',
+      '-font', 'DejaVu-Sans', '-fill', '#9fb3c8', '-pointsize', '34', '-gravity', 'north', '-annotate', '+0+90', 'Geluidsmeter',
+      '-fill', '#ffffff', '-pointsize', '170', '-font', 'DejaVu-Sans-Bold', '-annotate', '+0+260', '92',
+      '-fill', '#9fb3c8', '-pointsize', '46', '-font', 'DejaVu-Sans', '-annotate', '+0+470', 'dB(A)',
+      '-fill', '#e5a50a', '-pointsize', '34', '-annotate', '+0+560', 'Zeer luid',
+      '-stroke', '#3d8bfd', '-strokewidth', '6', '-fill', 'none',
+      '-draw', 'polyline 60,860 100,820 140,900 180,780 220,840 260,760 300,880 340,800 380,830 420,740 460,870 500,790 540,850 580,770 620,860 660,810',
+      '-stroke', 'none', '-fill', '#9fb3c8', '-pointsize', '28', '-annotate', '+0+990', 'Gem. 87 dB   Max. 96 dB   Duur 14 min',
+      '-fill', '#cbd5e1', '-pointsize', '30', '-annotate', '+0+1080', 'Paramaribo-Noord', '-annotate', '+0+1125', when,
+      '-depth', '8', out,
+    ]);
+    return readFileSync(out);
+  } catch {
+    return null;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -106,7 +177,7 @@ const FIN = 'Ministerie van Financiën en Planning';
 const DNA = 'De Nationale Assemblée';
 const BIZA = 'Ministerie van Binnenlandse Zaken';
 const SB = 'Penitentiaire Inrichting Santo Boma';
-const NL_EMB = 'Embassy of the Kingdom of the Netherlands';
+const GY_EMB = 'Embassy of the Co-operative Republic of Guyana';
 const SSS = 'Stichting Slachtofferhulp Suriname';
 const HVJ = 'Hof van Justitie';
 const BRH = 'Bureau voor Rechtshulp';
@@ -116,7 +187,7 @@ export const LETTERS: LetterSpec[] = [
   { key: 'invite-old', daysAgo: 296, clerk: 'assistant1@juspol.test', from: KPS, fromLines: KPS_LINES, kenmerk: 'KPS/PR/2025-044', subject: 'Uitnodiging opening politiepost Lelydorp', body: ['Het Korps Politie Suriname heeft de eer u uit te nodigen voor de officiële opening van de nieuwe politiepost te Lelydorp.', 'Wij verzoeken u uw aanwezigheid binnen 10 werkdagen te bevestigen.'], signer: 'R. Tjon Kie Sim', signerTitle: 'Korpschef a.i.' },
   { key: 'appointment', daysAgo: 270, clerk: 'assistant2@juspol.test', from: 'Commissie van Toezicht Penitentiaire Inrichtingen', fromLines: ['p/a Ministerie van Justitie en Politie'], kenmerk: 'CvT/2025-12', subject: 'Voordracht benoeming lid Commissie van Toezicht', body: ['De Commissie van Toezicht draagt mevrouw drs. A. Soekhoe voor als nieuw lid van de commissie, ter vervanging van het aftredende lid.', 'Wij verzoeken u de benoeming in overweging te nemen.'], signer: 'mr. H. Fernandes', signerTitle: 'Voorzitter' },
   { key: 'lawsuit', daysAgo: 190, clerk: 'assistant2@juspol.test', from: HVJ, fromLines: ['Griffie', 'Gravenstraat 2, Paramaribo'], kenmerk: 'AR 25-1182', subject: 'Oproeping in de civiele procedure Bouwbedrijf Santo N.V. tegen de Staat Suriname', body: ['Hierbij wordt de Staat Suriname, vertegenwoordigd door de Minister van Justitie en Politie, opgeroepen te verschijnen in de procedure inzake de aanbesteding van de uitbreiding van het justitiecomplex.', 'De zitting staat gepland binnen dertig dagen na dagtekening van deze oproeping.'], signer: 'mr. C. Pinas-Lie', signerTitle: 'Griffier' },
-  { key: 'gen-1', daysAgo: 170, clerk: 'assistant1@juspol.test', from: OM, fromLines: OM_LINES, kenmerk: 'PG/2025/3301', subject: 'Jaaroverzicht strafzaken 2025, eerste halfjaar', body: ['Hierbij bieden wij u het overzicht aan van de afgedane strafzaken in het eerste halfjaar.', 'Het overzicht is bestemd voor de beleidsvoorbereiding.'], signer: 'mr. R. Baarh', signerTitle: 'Procureur-Generaal' },
+  { key: 'gen-1', daysAgo: 170, clerk: 'assistant1@juspol.test', from: OM, fromLines: OM_LINES, kenmerk: 'PG/2025/3301', subject: 'Halfjaaroverzicht strafzaken, tweede helft 2025', body: ['Hierbij bieden wij u het overzicht aan van de afgedane strafzaken in de tweede helft van 2025.', 'Het overzicht is bestemd voor de beleidsvoorbereiding.'], signer: 'mr. R. Baarh', signerTitle: 'Procureur-Generaal' },
   { key: 'gen-2', daysAgo: 160, clerk: 'assistant1@juspol.test', from: BIZA, kenmerk: 'BZ/CBB/25-889', subject: 'Verzoek gegevens personeelsbestand voor de jaarlijkse telling', body: ['Ten behoeve van de jaarlijkse telling van het overheidspersoneel verzoeken wij u de gegevens van het personeelsbestand aan te leveren.', 'Wij verzoeken u de gegevens uiterlijk binnen 20 werkdagen aan te leveren.'], signer: 'drs. M. Ooft', signerTitle: 'Directeur Personeelsbeleid' },
   { key: 'gen-3', daysAgo: 150, clerk: 'assistant2@juspol.test', from: SSS, fromLines: ['Wanicastraat 51, Paramaribo'], kenmerk: 'SSS-25-071', subject: 'Aanvraag subsidie voor het programma slachtofferondersteuning', body: ['Stichting Slachtofferhulp Suriname verzoekt om een bijdrage voor de voortzetting van het programma voor de ondersteuning van slachtoffers van huiselijk geweld.', 'Een begroting is bijgevoegd.'], signer: 'mevr. J. Kasanpawiro', signerTitle: 'Voorzitter' },
   { key: 'gen-4', daysAgo: 140, clerk: 'assistant1@juspol.test', from: KPS, fromLines: KPS_LINES, kenmerk: 'KPS/LOG/2025-301', subject: 'Aanvraag vervanging dienstvoertuigen district Nickerie', body: ['De dienstvoertuigen van het district Nickerie zijn aan vervanging toe. Wij verzoeken om goedkeuring van de aanschaf van vier voertuigen.', 'Een offerte is bijgevoegd.'], signer: 'R. Tjon Kie Sim', signerTitle: 'Korpschef a.i.' },
@@ -127,7 +198,7 @@ export const LETTERS: LetterSpec[] = [
   { key: 'gen-9', daysAgo: 80, clerk: 'assistant2@juspol.test', from: KPS, fromLines: KPS_LINES, kenmerk: 'KPS/OO/2025-512', subject: 'Rapportage openbare orde jaarwisseling, voorbereiding', body: ['In het kader van de voorbereiding op de jaarwisseling bieden wij u het operationeel plan aan.', 'Wij verzoeken u uiterlijk 1 december uw opmerkingen kenbaar te maken.'], signer: 'R. Tjon Kie Sim', signerTitle: 'Korpschef a.i.' },
   { key: 'pardon', daysAgo: 66, clerk: 'assistant2@juspol.test', from: ADV, fromLines: ADV_LINES, kenmerk: 'BP/2026/0412', subject: 'Gratieverzoek ten behoeve van de heer J. Pinas', body: ['Namens onze cliënt, de heer J. Pinas, thans verblijvend in de Penitentiaire Inrichting Santo Boma, verzoeken wij u gratie te verlenen voor het resterende deel van de opgelegde gevangenisstraf.', 'Cliënt heeft twee derde van zijn straf uitgezeten, heeft zich voorbeeldig gedragen en heeft een vaste baan in het vooruitzicht. Een verklaring van de werkgever en een gedragsrapport zijn bijgevoegd.', 'Wij verzoeken u binnen 30 dagen een beslissing te nemen.'], signer: 'mr. D. Brahim', signerTitle: 'Advocaat' },
   { key: 'pardon-dup', daysAgo: 64, clerk: 'assistant1@juspol.test', from: ADV, fromLines: ADV_LINES, kenmerk: 'BP/2026/0412', subject: 'Gratieverzoek de heer J. Pinas (per e-mail)', body: ['Namens onze cliënt, de heer J. Pinas, verzoeken wij u gratie te verlenen voor het resterende deel van de opgelegde gevangenisstraf.', 'Deze brief werd eerder per post verzonden.'], signer: 'mr. D. Brahim', signerTitle: 'Advocaat', draft: true },
-  { key: 'mla', daysAgo: 58, clerk: 'assistant1@juspol.test', from: NL_EMB, fromLines: ['Van Roseveltkade 5, Paramaribo'], place: 'Paramaribo', kenmerk: 'PAR/JUS/2026-17', subject: 'Request for mutual legal assistance in a fraud investigation', language: 'en', classification: 'CONFIDENTIAL', body: ['On behalf of the Public Prosecution Service of the Netherlands, we kindly request your assistance in obtaining bank records and witness statements in an ongoing fraud investigation.', 'The request is made under the bilateral treaty on mutual legal assistance in criminal matters.', 'We would appreciate a reply within 30 days.'], signer: 'M. van der Berg', signerTitle: 'Liaison Officer Justice and Security' },
+  { key: 'mla', daysAgo: 58, clerk: 'assistant1@juspol.test', from: GY_EMB, fromLines: ['Paramaribo'], place: 'Paramaribo', kenmerk: 'GY/PBO/2026-17', subject: 'Request for mutual legal assistance in a fraud investigation', language: 'en', classification: 'CONFIDENTIAL', body: ['On behalf of the Director of Public Prosecutions of Guyana, we kindly request your assistance in obtaining bank records and witness statements in an ongoing fraud investigation.', 'The request is made under the bilateral treaty on mutual legal assistance in criminal matters.', 'We would appreciate a reply within 30 days.'], signer: 'S. Persaud', signerTitle: 'First Secretary' },
   { key: 'bill', daysAgo: 52, clerk: 'assistant2@juspol.test', from: DNA, fromLines: ['Onafhankelijkheidsplein 10, Paramaribo'], kenmerk: 'DNA/CJ/2026-033', subject: 'Commentaar Vaste Commissie op het ontwerp Wet Slachtofferhulp', body: ['De Vaste Commissie voor Justitie en Politie heeft het ontwerp van de Wet Slachtofferhulp besproken en biedt u haar commentaar aan.', 'De commissie verzoekt u binnen 15 werkdagen schriftelijk te reageren op de gestelde vragen, zodat de openbare behandeling kan worden voorbereid.'], signer: 'mevr. drs. R. Bhola', signerTitle: 'Voorzitter Vaste Commissie' },
   { key: 'budget', daysAgo: 45, clerk: 'assistant1@juspol.test', from: FIN, fromLines: ['Tamarindelaan 3, Paramaribo'], kenmerk: 'FIN/BB/2026-140', subject: 'Instructie opstellen begroting 2027', body: ['Hierbij ontvangt u de instructie voor het opstellen van de begroting voor het dienstjaar 2027.', 'De ontwerpbegroting dient uiterlijk 30 november 2026 te worden ingediend.'], signer: 'drs. A. Raghoebarsing', signerTitle: 'Directeur Financiën' },
   { key: 'residence', daysAgo: 40, clerk: 'assistant2@juspol.test', from: ADV, fromLines: ADV_LINES, kenmerk: 'BP/2026/0533', subject: 'Aanvraag verblijfsvergunning familie Mohan', body: ['Namens de familie Mohan verzoeken wij om verlening van een verblijfsvergunning voor bepaalde tijd, in verband met werk en gezinshereniging.', 'De vereiste stukken, waaronder de arbeidsovereenkomst en de geboorteakten, zijn bijgevoegd.'], signer: 'mr. D. Brahim', signerTitle: 'Advocaat' },

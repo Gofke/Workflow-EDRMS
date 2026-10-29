@@ -2,7 +2,7 @@ import { Archive, Check, Paperclip, Plus, Send, X } from 'lucide-react';
 import { FormEvent, ReactNode, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { bytes, dateTime, longDate } from '../lib/format';
+import { bytes, dateTime, dueLabel, longDate } from '../lib/format';
 import { useAction, useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
@@ -135,8 +135,8 @@ export default function TaskDetailPage() {
       {(blockedByChecklist || blockedBySubtasks) && open && can.canComplete && (
         <div style={{ marginBottom: 14 }}>
           <Notice tone="info">
-            {blockedByChecklist ? t(`Nog ${remaining} punt(en) op de checklist. `, `${remaining} checklist point(s) left. `) : ''}
-            {blockedBySubtasks ? t(`Nog ${task.subtaskOpen} subtaak/subtaken open.`, `${task.subtaskOpen} subtask(s) still open.`) : ''} {t('Afronden kan als alles klaar is.', 'You can complete once everything is done.')}
+            {blockedByChecklist ? t(`Nog ${remaining} ${remaining === 1 ? 'controlepunt' : 'controlepunten'} open. `, `${remaining} checklist ${remaining === 1 ? 'point' : 'points'} left. `) : ''}
+            {blockedBySubtasks ? t(`Nog ${task.subtaskOpen} ${task.subtaskOpen === 1 ? 'deeltaak' : 'deeltaken'} open.`, `${task.subtaskOpen} ${task.subtaskOpen === 1 ? 'subtask' : 'subtasks'} still open.`) : ''} {t('Afronden kan als alles klaar is.', 'You can complete once everything is done.')}
           </Notice>
         </div>
       )}
@@ -188,12 +188,12 @@ export default function TaskDetailPage() {
             </div>
           </Panel>
           <Panel
-            title={t('Subtaken', 'Subtasks')}
+            title={t('Deeltaken', 'Subtasks')}
             actions={
               can.canAddSubtask &&
               !task.parentTaskId && (
                 <button type="button" className="btn sm" onClick={() => setDialog('subtask')}>
-                  <Plus size={15} /> {t('Subtaak', 'Subtask')}
+                  <Plus size={15} /> {t('Deeltaak', 'Subtask')}
                 </button>
               )
             }
@@ -209,7 +209,7 @@ export default function TaskDetailPage() {
               </ul>
             ) : (
               <p className="small muted" style={{ padding: '4px 20px 14px' }}>
-                {t('Geen subtaken.', 'No subtasks.')}
+                {t('Geen deeltaken.', 'No subtasks.')}
               </p>
             )}
           </Panel>
@@ -261,7 +261,37 @@ export default function TaskDetailPage() {
               rows={[
                 [t('Uitvoerder', 'Assignee'), task.assignee.name],
                 [t('Opdrachtgever', 'Owner'), task.owner.name],
-                [t('Termijn', 'Due'), task.dueDate ? <span key="d">{longDate(task.dueDate, language)} — <Due date={task.dueDate} done={!open} /></span> : '—'],
+                [
+                  t('Termijn', 'Due'),
+                  task.dueDate ? (
+                    open ? (
+                      <span key="d">
+                        {longDate(task.dueDate, language)}
+                        {/* Near or past the deadline, say so; further away the date is enough. */}
+                        {dueLabel(task.dueDate, language).tone && (
+                          <>
+                            {' — '}
+                            <Due date={task.dueDate} />
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span key="d">
+                        {longDate(task.dueDate, language)}
+                        {task.completedAt &&
+                          (() => {
+                            // The day it was finished, in Suriname time.
+                            const day = new Date(Date.parse(task.completedAt) - 3 * 3600_000).toISOString().slice(0, 10);
+                            return day <= task.dueDate
+                              ? t(` — op tijd afgerond, ${longDate(day, language)}`, ` — finished on time, ${longDate(day, language)}`)
+                              : t(` — afgerond na de termijn, ${longDate(day, language)}`, ` — finished after the deadline, ${longDate(day, language)}`);
+                          })()}
+                      </span>
+                    )
+                  ) : (
+                    '—'
+                  ),
+                ],
                 [t('Zaak', 'Matter'), task.dossier ? <Link key="z" to={`/zaken/${task.dossier.id}`}>{task.dossier.identity} — {task.dossier.subject}</Link> : '—'],
                 [t('Brief', 'Letter'), task.item ? <span key="i" className="row" style={{ gap: 6 }}><Stamp value={task.item.identity} to={`/post/${task.item.id}`} /> {task.item.subject}</span> : '—'],
                 [t('Hoofdtaak', 'Parent task'), task.parentTaskId ? <Link key="p" to={`/taken/${task.parentTaskId}`}>{task.parentReference}</Link> : '—'],

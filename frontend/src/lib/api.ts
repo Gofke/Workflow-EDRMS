@@ -1,6 +1,8 @@
+import { dutchMessage } from './apiMessages';
+
 /**
  * The API client. Every call carries the session cookie; every failure becomes
- * an ApiError with the server's own message, which the screens show as is.
+ * an ApiError with the server's message, in Dutch when Dutch is chosen.
  */
 export class ApiError extends Error {
   constructor(
@@ -12,13 +14,22 @@ export class ApiError extends Error {
   }
 }
 
+function currentLanguage(): 'nl' | 'en' {
+  try {
+    return localStorage.getItem('juspol.lang') === 'en' ? 'en' : 'nl';
+  } catch {
+    return 'nl';
+  }
+}
+
 async function handle<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
   const type = response.headers.get('content-type') ?? '';
   const body = type.includes('json') ? await response.json().catch(() => null) : await response.text().catch(() => null);
   if (!response.ok) {
     const raw = body && typeof body === 'object' ? (body as { message?: unknown }).message : null;
-    const message = Array.isArray(raw) ? String(raw[0]) : typeof raw === 'string' ? raw : `The server answered ${response.status}.`;
+    const original = Array.isArray(raw) ? String(raw[0]) : typeof raw === 'string' ? raw : `The server answered ${response.status}.`;
+    const message = currentLanguage() === 'en' ? original : dutchMessage(response.status, original);
     throw new ApiError(response.status, message, body);
   }
   return body as T;

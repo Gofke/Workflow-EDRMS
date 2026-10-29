@@ -241,8 +241,9 @@ export function VerifyPage() {
             {result.documentSha256 && (
               <>
                 <dt>{t('Vingerafdruk', 'Fingerprint')}</dt>
-                <dd className="xs" style={{ fontWeight: 400, wordBreak: 'break-all' }}>
-                  SHA-256 {result.documentSha256}
+                <dd className="xs mono" style={{ fontWeight: 400 }}>
+                  {/* In groups of eight, so the long number wraps between groups and can be compared by eye. */}
+                  SHA-256 {result.documentSha256.match(/.{1,8}/g)?.join(' ')}
                 </dd>
               </>
             )}

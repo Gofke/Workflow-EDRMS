@@ -212,10 +212,10 @@ export const HELP: HelpArticle[] = [
   {
     id: 'retention',
     link: '/archief',
-    keywords: 'bewaartermijn archief vernietigen overbrengen nationaal archief archiefplan juridische blokkade retention archive destroy transfer legal hold file plan',
+    keywords: 'bewaartermijn archief vernietigen overbrengen nationaal archief archiefplan juridische bewaarplicht retention archive destroy transfer legal hold file plan',
     nl: {
       title: 'Bewaren, vernietigen en overbrengen',
-      body: 'Elke zaak volgt de bewaartermijn van haar categorie. De archiefbeheerder ziet onder Archief welke zaken aan de beurt zijn en besluit tot vernietigen of overbrengen naar het Nationaal Archief (met een exportpakket). Een juridische blokkade houdt een zaak vast zolang dat nodig is.',
+      body: 'Elke zaak volgt de bewaartermijn van haar categorie. De archiefbeheerder ziet onder Archief welke zaken aan de beurt zijn en besluit tot vernietigen of overbrengen naar het Nationaal Archief (met een exportpakket). Een juridische bewaarplicht houdt een zaak vast zolang dat nodig is.',
     },
     en: {
       title: 'Retention, destruction and transfer',

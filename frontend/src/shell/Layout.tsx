@@ -99,7 +99,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const nav: { group?: string; to: string; icon: ReactNode; label: string; count?: number; show: boolean; tour?: string }[] = [
     { to: '/', icon: <Home size={19} />, label: t('Mijn werk', 'My work'), show: business, tour: 'mywork' },
-    { to: '/post', icon: <Inbox size={19} />, label: t('Post', 'Post'), count: counts?.draftsToRegister, show: business, tour: 'post' },
+    { to: '/post', icon: <Inbox size={19} />, label: t('Post', 'Mail'), count: counts?.draftsToRegister, show: business, tour: 'post' },
     { to: '/zaken', icon: <FolderOpen size={19} />, label: t('Zaken', 'Matters'), show: business },
     { to: '/taken', icon: <CheckSquare size={19} />, label: t('Taken', 'Tasks'), count: counts?.openTasks, show: business },
     { to: '/goedkeuringen', icon: <ClipboardCheck size={19} />, label: t('Beoordelen', 'Review'), count: reviews, show: business },
@@ -196,7 +196,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </NavLink>
           <NavLink to="/post">
             <Inbox size={20} />
-            {t('Post', 'Post')}
+            {t('Post', 'Mail')}
           </NavLink>
           <NavLink to="/taken">
             <CheckSquare size={20} />
