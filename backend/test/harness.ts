@@ -54,6 +54,7 @@ export async function truncateAll(db: DataSource): Promise<void> {
               job_run, public_holiday, deadline_notice, push_subscription, sms_outbox, email_outbox,
               account_contact, notification_preference, notification,
               task_event, task_attachment, task_mention, task_comment, task_checklist_item, task_audience, task, task_template,
+              project_event, project_member, project_milestone, project,
               record_view_event, record_access_grant, classification_change, account_mfa, login_attempt, system_setting,
               approval_route, dossier_category,
               document_text, dossier_state_event, workflow_event, delegation, captured_document, responsibility_assignment, due_date_change,
@@ -65,6 +66,7 @@ export async function truncateAll(db: DataSource): Promise<void> {
   await db.query(`ALTER SEQUENCE registration_sequence RESTART WITH 1`);
   await db.query(`ALTER SEQUENCE dossier_sequence RESTART WITH 1`);
   await db.query(`ALTER SEQUENCE task_sequence RESTART WITH 1`);
+  await db.query(`ALTER SEQUENCE project_sequence RESTART WITH 1`);
 }
 
 /** Seeds the same actors as the pilot seed, reusing its data rather than copying it. */
