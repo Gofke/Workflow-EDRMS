@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `deploy/install.sh` accepts Google's new API key format (`AQ.…`), which AI Studio issues since 2026; the assistant already sends the key in the `x-goog-api-key` header that these keys need
+- Installer test: 27 checks
+
 ## V0.4.1 — Installer ready for a real server
 
 - `deploy/install.sh`: documents and keys are stored in `/opt/juspol/<env>/storage` (the release folder is read-only for the service, so V0.4.0 could not create its sealing key there and did not start)

@@ -111,6 +111,14 @@ rc=$(run "${A[@]}" --release "$R1")
 check "without a local PostgreSQL the first run writes the settings (key included) and stops; example values do not pass" '[[ $rc -ne 0 ]] && grep -q "no local PostgreSQL found" "$T/out" && [[ "$(setting APP_ENV)" == staging && "$(setting AI_API_KEY)" == Demo-Secret-Key-1234567890 && "$(setting DB_PASSWORD)" == change_me ]]'
 check "settings: storage and keys in the writable folder, fresh secrets, no demo password" '[[ "$(setting DOCUMENT_STORAGE_PATH)" == "$JUSPOL_PREFIX/opt/juspol/staging/storage/documents" && "$(setting KEYS_DIR)" == "$JUSPOL_PREFIX/opt/juspol/staging/storage/keys" && ${#S} -gt 0 && "$(setting SESSION_SECRET)" =~ ^[A-Za-z0-9]{64}$ && "$(setting MFA_ENCRYPTION_KEY)" =~ ^[A-Za-z0-9]{64}$ && -z "$(setting SEED_PASSWORD)" && "$(setting PUBLIC_BASE_URL)" == https://edrms-test.juspol.sr ]]'
 
+rm -f "$S"
+rc=$(JUSPOL_AI_KEY="not a key!" run "${A[@]}" --release "$R1")
+check "something that is not a key is refused and no settings are written" '[[ $rc -ne 0 ]] && grep -q "does not look like an API key" "$T/out" && [[ ! -f "$S" ]]'
+# Google AI Studio issues keys in the "AQ." format since 2026; built at run time, so none is stored in git.
+rc=$(JUSPOL_AI_KEY="$(printf '%s%s' 'AQ.Ab8RN6' 'Ldemo-only_key0123456789')" run "${A[@]}" --release "$R1")
+check "a key in Google's AQ. format is accepted and written" '[[ "$(setting AI_API_KEY)" == AQ.Ab8RN6Ldemo-only_key0123456789 && "$(setting AI_PROVIDER)" == gemini ]]'
+rm -f "$S"; rc=$(run "${A[@]}" --release "$R1")
+
 echo postgres >> "$T/state/users"; echo 1 > "$T/state/db-exists"
 rc=$(run "${A[@]}" --release "$R1")
 check "an existing role or database of that name is never taken over" '[[ $rc -ne 0 ]] && grep -q "already has a role or database juspol_staging" "$T/out" && [[ ! -f "$T/state/psql-stdin" ]]'

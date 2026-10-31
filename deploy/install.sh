@@ -270,7 +270,7 @@ else
     read -r -s -p "Gemini key for $ENV_NAME (empty: the assistant runs offline; it can be added later): " key; echo
   elif [[ "$key" == "__ask__" ]]; then key=""; fi
   if [[ -n "$key" ]]; then
-    [[ "$key" =~ ^[A-Za-z0-9_-]{20,200}$ ]] || { rm -f "$SETTINGS.new"; die "that does not look like an API key"; }
+    [[ "$key" =~ ^[A-Za-z0-9_.-]{20,200}$ ]] || { rm -f "$SETTINGS.new"; die "that does not look like an API key"; }
     set_value AI_PROVIDER gemini
     set_value AI_MODEL gemini-flash-latest
     set_value AI_FALLBACK_MODELS gemini-flash-lite-latest
