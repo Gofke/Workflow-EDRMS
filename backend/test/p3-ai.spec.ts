@@ -356,7 +356,14 @@ describe('Phase 3 assistant (AI)', () => {
     const translated = (await agent.post('/api/ai/translate').send({ text: 'Verzoek tot overplaatsing van een gedetineerde.', to: 'en' }).expect(200)).body;
     expect(translated.translation).toBe('Request for transfer of a detainee.');
     // An address outside the ministry network: confidential material stays home.
+    // V0.4.0: by default (data policy "metadata") no record text leaves the network at all.
     await setAi({ provider: 'openai-compatible', baseUrl: `http://0.0.0.0:${modelPort}/v1`, externalProviderAcknowledged: true }).then((r) => expect(r.status).toBe(200));
+    const home = (await agent.post(`/api/ai/items/${incomingId}/summary`).send({}).expect(200)).body;
+    expect(home.engine.provider).toBe('builtin');
+    expect(home.engine.fallback).toMatch(/gegevensbeleid/);
+    // With the policy "records" on a paid tier, open records may go out (a free external tier never gets them).
+    process.env.AI_TIER = 'paid';
+    await setAi({ provider: 'openai-compatible', baseUrl: `http://0.0.0.0:${modelPort}/v1`, externalProviderAcknowledged: true, dataPolicy: 'records' }).then((r) => expect(r.status).toBe(200));
     const confidential = await letter('assistant1@juspol.test', 'Vertrouwelijk verzoek', 'Advocatenkantoor Brahim', { classification: 'CONFIDENTIAL' }, 'Dit is een vertrouwelijk verzoek om gratie voor de gedetineerde.');
     const count = received.length;
     const kept = (await agent.post(`/api/ai/items/${confidential.id}/summary`).send({}).expect(200)).body;
@@ -366,6 +373,7 @@ describe('Phase 3 assistant (AI)', () => {
     const open = (await agent.post(`/api/ai/items/${incomingId}/summary`).send({}).expect(200)).body;
     expect(open.engine).toMatchObject({ provider: 'openai-compatible', local: false });
     expect(received.length).toBe(count + 1);
+    delete process.env.AI_TIER;
     // A model that does not answer: the built-in assistant answers, and says so.
     await setAi({ provider: 'ollama', baseUrl: 'http://127.0.0.1:1/v1' });
     const fallback = (await agent.post(`/api/ai/dossiers/${dossierId}/summary`).send({}).expect(200)).body;

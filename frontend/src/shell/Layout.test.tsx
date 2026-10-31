@@ -1,6 +1,8 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { me, renderPage, server } from '../test/harness';
+import { CLIENT, me, renderPage, server } from '../test/harness';
+
+const CLIENT_WITH_ASSISTANT = { ...CLIENT, ai: { ...CLIENT.ai, features: { ...CLIENT.ai.features, assistant: true } } };
 import { Layout } from './Layout';
 
 const menu = async () => {
@@ -36,6 +38,13 @@ describe('Main menu by role', () => {
     const items = await menu();
     expect(items.sort()).toEqual(['Archief', 'Help', 'Logboek en integriteit'].sort());
     expect(screen.queryByRole('button', { name: /Vraag de assistent/ })).not.toBeInTheDocument();
+  });
+
+  it('gives the auditor the assistant panel once the administrator switches it on (it then answers with audit figures only)', async () => {
+    server(me(['AUDITOR']), { 'GET /api/settings/client': { ...CLIENT_WITH_ASSISTANT } });
+    renderPage(<Layout><p>inhoud</p></Layout>);
+    await menu();
+    expect(await screen.findByRole('button', { name: /Vraag de assistent/ })).toBeInTheDocument();
   });
 
   it('gives the Minister the management overview and reports', async () => {
