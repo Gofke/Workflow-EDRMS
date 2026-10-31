@@ -1,5 +1,24 @@
 # Changelog
 
+## V0.4.0 — Assistant panel on Gemini, line of command
+
+- "Vraag de assistent": a chat panel like ChatGPT on every page, docked on the right (full screen on a phone): model badge, examples per role, safe Markdown answers with record cards, Stop, new chat, questions left this hour, privacy notice for the free tier
+- Google Gemini (free tier) behind a provider adapter (Gemini, OpenAI-compatible, Ollama, Anthropic), switched by settings or environment; fallback model `gemini-flash-lite-latest`, then the built-in offline assistant
+- Read-only tools filtered by role and line of command: my work, find, list, count (per unit, person, status, month), deadline risk, organisation, summary and draft reply (made on the server, shown as cards), retention (records manager), audit figures (auditor), system status (system administrator)
+- Line of command: Minister → directorate → sub-directorate → department → employee; stand-ins included; enforced in every query, never in the prompt
+- Free tier gets metadata only: no subjects, document text or confidential records; typed phone numbers, e-mail addresses and ID numbers removed
+- `POST /api/v1/ai/query`, `GET /api/v1/ai/status`, `GET /api/v1/ai/config`, `GET /api/v1/health` in the guide's contract and error codes
+- Limits: 30 questions per person per hour, 60 requests per address per minute, 6 rounds, 30 s per call, 80 s per question
+- Audit events `AI_QUESTION_ANSWERED` / `AI_QUESTION_FAILED` without question text
+- New unit kind Onderdirectoraat; demonstration ministry with two directorates and four sub-directorates; organisation shown as a tree
+- Beheer → Assistent: Gemini, fallback models, data policy, scope, questions per hour, offline fallback; values fixed on the server shown as such
+- `deploy/install.sh` (staging/production, rollback, refuses another site's address and the production key on staging), `deploy/pack.sh`, stubbed installer test
+- Start-up guard: a staging server refuses the production key or database
+- Documents: business document, design, audit document with AU-01…AU-35, evaluation set (40 NL + 40 EN), tester sheet
+- Independent review: 20 findings fixed — stand-ins keep their own line, summaries and drafts respect the line, confidential records never in counts or lists sent to the model (a note card tells the person), look-alike numbers redacted, free-tier rule for every external provider and parsed local addresses, hourly quota safe under parallel questions, installer keeps secrets off the command line and follows a new port, database copy before every update
+- Tests: backend 379 (assistant 84), frontend 40, installer 12
+- Model to record at release: `gemini-flash-latest` (alias) — write the `modelVersion` returned on staging here; evaluation score: pending (run with the ministry's key on staging)
+
 ## V0.3.0 — Phase 3
 
 The Workflow EDRMS and Workflow Task Management panels merged into one system,

@@ -1,6 +1,6 @@
 {
   "name": "juspol-edrms-backend",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "JusPol EDRMS - Delivery 1 Proof of Concept - backend API",
   "private": true,
   "scripts": {
