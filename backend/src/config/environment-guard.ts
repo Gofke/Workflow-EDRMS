@@ -12,6 +12,17 @@ export function fingerprint(value: string): string {
   return createHash('sha256').update(value.trim()).digest('hex').slice(0, 16);
 }
 
+/**
+ * The Secure flag of the session cookie. Production always requires HTTPS.
+ * Staging follows the connection ('auto': Secure when nginx forwards HTTPS), so
+ * a staging site whose certificate could not be obtained yet still lets people
+ * sign in. Development runs on plain http.
+ */
+export function sessionCookieSecure(env: NodeJS.ProcessEnv): boolean | 'auto' {
+  if (env.NODE_ENV !== 'production') return false;
+  return (env.APP_ENV ?? '').trim() === 'staging' ? 'auto' : true;
+}
+
 export function environmentProblems(env: NodeJS.ProcessEnv): string[] {
   const problems: string[] = [];
   const appEnv = (env.APP_ENV ?? 'development').trim();

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import express from 'express';
 import { AppModule } from './app.module';
 import { assistantGate } from './ai/agent/assistant.controller';
+import { sessionCookieSecure } from './config/environment-guard';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PgSession = require('connect-pg-simple')(session);
@@ -44,7 +45,6 @@ export async function createApp(): Promise<INestApplication> {
     bodyParser: true,
     logger: process.env.DEBUG_NEST ? ['error', 'warn'] : false,
   });
-  const isProduction = process.env.NODE_ENV === 'production';
   const idleMinutes = Number(process.env.SESSION_IDLE_MINUTES ?? 30);
 
   app.use(helmet());
@@ -91,7 +91,7 @@ export async function createApp(): Promise<INestApplication> {
       cookie: {
         httpOnly: true,
         sameSite: 'lax',
-        secure: isProduction,
+        secure: sessionCookieSecure(process.env),
         maxAge: idleMinutes * 60 * 1000,
       },
     }),
