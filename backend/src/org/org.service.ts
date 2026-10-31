@@ -31,7 +31,7 @@ export interface PersonView {
   absentUntil: string | null;
 }
 
-const KINDS = ['CABINET', 'DIRECTORATE', 'DEPARTMENT', 'DISTRICT', 'OFFICE', 'SERVICE'];
+const KINDS = ['CABINET', 'DIRECTORATE', 'SUB_DIRECTORATE', 'DEPARTMENT', 'DISTRICT', 'OFFICE', 'SERVICE'];
 
 /**
  * The ministry's structure: units, their place under each other, their heads,

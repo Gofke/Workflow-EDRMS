@@ -40,17 +40,26 @@ type Agent = ReturnType<typeof request.agent>;
 const PASSWORD = process.env.SEED_PASSWORD as string;
 
 const EXTRA_UNITS = [
-  { code: 'JZ', name: 'Juridische Zaken en Wetgeving', kind: 'DEPARTMENT', parent: 'HO-DIR' },
-  { code: 'JI', name: 'Justitiële Inrichtingen', kind: 'DEPARTMENT', parent: 'HO-DIR' },
-  { code: 'VZ', name: 'Vreemdelingenzaken en Naturalisatie', kind: 'DEPARTMENT', parent: 'HO-DIR' },
-  { code: 'PZ', name: 'Personeelszaken', kind: 'DEPARTMENT', parent: 'HO-DIR' },
-  { code: 'FZ', name: 'Financiële Zaken', kind: 'DEPARTMENT', parent: 'HO-DIR' },
-  { code: 'PO', name: 'Politiezaken en Openbare Orde', kind: 'DEPARTMENT', parent: 'HO-DIR' },
+  // Minister → directorates → sub-directorates → departments → employees.
+  { code: 'DIR-BP', name: 'Directoraat Bedrijfsvoering en Politie', kind: 'DIRECTORATE', parent: 'HO-KAB' },
+  { code: 'SUB-JZ', name: 'Onderdirectoraat Juridische Zaken en Vreemdelingenzaken', kind: 'SUB_DIRECTORATE', parent: 'HO-DIR' },
+  { code: 'SUB-JI', name: 'Onderdirectoraat Justitiële Inrichtingen', kind: 'SUB_DIRECTORATE', parent: 'HO-DIR' },
+  { code: 'SUB-BV', name: 'Onderdirectoraat Bedrijfsvoering', kind: 'SUB_DIRECTORATE', parent: 'DIR-BP' },
+  { code: 'SUB-PO', name: 'Onderdirectoraat Politie en Openbare Orde', kind: 'SUB_DIRECTORATE', parent: 'DIR-BP' },
+  { code: 'JZ', name: 'Juridische Zaken en Wetgeving', kind: 'DEPARTMENT', parent: 'SUB-JZ' },
+  { code: 'VZ', name: 'Vreemdelingenzaken en Naturalisatie', kind: 'DEPARTMENT', parent: 'SUB-JZ' },
+  { code: 'JI', name: 'Justitiële Inrichtingen', kind: 'DEPARTMENT', parent: 'SUB-JI' },
+  { code: 'PZ', name: 'Personeelszaken', kind: 'DEPARTMENT', parent: 'SUB-BV' },
+  { code: 'FZ', name: 'Financiële Zaken', kind: 'DEPARTMENT', parent: 'SUB-BV' },
+  { code: 'PO', name: 'Politiezaken en Openbare Orde', kind: 'DEPARTMENT', parent: 'SUB-PO' },
   { code: 'REG', name: 'Centrale Registratie en Archief', kind: 'OFFICE', parent: 'HO-KAB' },
   { code: 'IA', name: 'Interne Audit', kind: 'OFFICE', parent: 'HO-KAB' },
 ];
 
 const EXTRA_PEOPLE = [
+  { email: 'directeur2@juspol.test', fullName: 'C. Doelwijt', job: 'Directeur Bedrijfsvoering en Politie', unit: 'DIR-BP', roles: ['DIRECTEUR'], head: true },
+  { email: 'onderdirecteur2@juspol.test', fullName: 'F. Karijopawiro', job: 'Onder-Directeur Bedrijfsvoering', unit: 'SUB-BV', roles: ['ONDER_DIRECTEUR'], head: true },
+  { email: 'onderdirecteur3@juspol.test', fullName: 'M. Wijngaarde', job: 'Onder-Directeur Politie en Openbare Orde', unit: 'SUB-PO', roles: ['ONDER_DIRECTEUR'], head: true },
   { email: 'kartodikromo@juspol.test', fullName: 'N. Kartodikromo', job: 'Hoofd Juridische Zaken', unit: 'JZ', roles: ['SUPPORT_STAFF'], head: true },
   { email: 'wongsodikromo@juspol.test', fullName: 'P. Wongsodikromo', job: 'Beleidsmedewerker Juridische Zaken', unit: 'JZ', roles: ['SUPPORT_STAFF'] },
   { email: 'sabajo@juspol.test', fullName: 'R. Sabajo', job: 'Hoofd Justitiële Inrichtingen', unit: 'JI', roles: ['SUPPORT_STAFF'], head: true },
@@ -448,7 +457,10 @@ async function main() {
     await db.query(`UPDATE account SET password_hash = $1`, [passwordHash]).catch(() => undefined);
     await ok(admin.put(`/api/org/units/${demo.units.get('HO-KAB')}`).send({ headAccountId: demo.id('minister@juspol.test') }), 200);
     await ok(admin.put(`/api/org/units/${demo.units.get('HO-DIR')}`).send({ headAccountId: demo.id('directeur@juspol.test'), parentUnitId: demo.units.get('HO-KAB') }), 200);
-    await ok(admin.put(`/api/org/units/${demo.units.get('HO-ICT')}`).send({ headAccountId: demo.id('sysadmin@juspol.test'), parentUnitId: demo.units.get('HO-DIR') }), 200);
+    await ok(admin.put(`/api/org/units/${demo.units.get('HO-ICT')}`).send({ headAccountId: demo.id('sysadmin@juspol.test'), parentUnitId: demo.units.get('SUB-BV') }), 200);
+    // The two Onder-Directeuren of the Directoraat Justitie each head a sub-directorate.
+    await ok(admin.put(`/api/org/units/${demo.units.get('SUB-JZ')}`).send({ headAccountId: demo.id('dualrole@juspol.test') }), 200);
+    await ok(admin.put(`/api/org/units/${demo.units.get('SUB-JI')}`).send({ headAccountId: demo.id('onderdirecteur@juspol.test') }), 200);
 
     await ok(admin.post('/api/calendar/holidays/load-suriname'), 200);
     const settings = (await ok(admin.get('/api/settings'), 200)) as Record<string, Record<string, unknown>>;

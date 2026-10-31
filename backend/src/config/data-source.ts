@@ -34,6 +34,7 @@ import { CaseFiles1759700000000 } from '../migrations/1759700000000-CaseFiles';
 import { Approvals1759800000000 } from '../migrations/1759800000000-Approvals';
 import { SearchAiIntegrations1759900000000 } from '../migrations/1759900000000-SearchAiIntegrations';
 import { Phase3Extras1760000000000 } from '../migrations/1760000000000-Phase3Extras';
+import { AssistantGemini1760100000000 } from '../migrations/1760100000000-AssistantGemini';
 
 dotenv.config();
 
@@ -76,6 +77,7 @@ export const dataSourceOptions = {
     Approvals1759800000000,
     SearchAiIntegrations1759900000000,
     Phase3Extras1760000000000,
+    AssistantGemini1760100000000,
   ],
   // Never true. The schema changes only through a reviewed migration.
   synchronize: false,

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
-import { AccessService } from '../access/access.service';
+import { AccessProfile, AccessService } from '../access/access.service';
 import { AuditEventType } from '../audit/audit-event.entity';
 import { AuditService } from '../audit/audit.service';
 import { MANAGEMENT_ROLES, readableDate, todayInSuriname } from '../common/actor';
@@ -191,22 +191,34 @@ export class TasksService {
    * sees the tasks held in their unit. A task on a classified matter is shown
    * only to someone who may see that matter or who is part of the task.
    */
+  /**
+   * Which tasks a person may see, as SQL on alias t, with parameters numbered
+   * from `next`. The same rule the task screens use; the assistant uses it too.
+   */
+  visibility(profile: AccessProfile, next: number, alias = 't'): { sql: string; params: unknown[] } {
+    const params: unknown[] = [profile.accountId];
+    const me = `$${next}`;
+    const t = alias;
+    const manager = profile.roles.some((r) => MANAGEMENT_ROLES.includes(r));
+    const involved = `(${t}.created_by_account_id = ${me} OR ${t}.owner_account_id = ${me} OR ${t}.assignee_account_id = ${me}
+        OR EXISTS (SELECT 1 FROM task_audience ta WHERE ta.task_id = ${t}.id AND ta.account_id = ${me}))`;
+    const headOf = `EXISTS (SELECT 1 FROM account x JOIN organisational_unit u ON u.id = x.organisational_unit_id
+        WHERE x.id = ${t}.assignee_account_id AND u.head_account_id = ${me})`;
+    const dp = this.access.dossierPredicate(profile, 'dd', next + params.length);
+    params.push(...dp.params);
+    const ip = this.access.itemPredicate(profile, 'ii', next + params.length);
+    params.push(...ip.params);
+    const matterOk = `((${t}.dossier_id IS NULL OR EXISTS (SELECT 1 FROM dossier dd WHERE dd.id = ${t}.dossier_id AND ${dp.sql}))
+        AND (${t}.correspondence_item_id IS NULL OR EXISTS (SELECT 1 FROM correspondence_item ii WHERE ii.id = ${t}.correspondence_item_id AND ${ip.sql})))`;
+    return { sql: `(${involved} OR ((${manager ? 'true' : 'false'} OR ${headOf}) AND ${matterOk}))`, params };
+  }
+
   private async listFilter(accountId: string, query: TaskListQuery): Promise<{ where: string; params: unknown[] }> {
     const profile = await this.access.profile(accountId);
-    const params: unknown[] = [accountId];
+    const v = this.visibility(profile, 1);
+    const params: unknown[] = [...v.params];
     const me = '$1';
-    const manager = profile.roles.some((r) => MANAGEMENT_ROLES.includes(r));
-    const involved = `(t.created_by_account_id = ${me} OR t.owner_account_id = ${me} OR t.assignee_account_id = ${me}
-        OR EXISTS (SELECT 1 FROM task_audience ta WHERE ta.task_id = t.id AND ta.account_id = ${me}))`;
-    const headOf = `EXISTS (SELECT 1 FROM account x JOIN organisational_unit u ON u.id = x.organisational_unit_id
-        WHERE x.id = t.assignee_account_id AND u.head_account_id = ${me})`;
-    const dp = this.access.dossierPredicate(profile, 'dd', params.length + 1);
-    params.push(...dp.params);
-    const ip = this.access.itemPredicate(profile, 'ii', params.length + 1);
-    params.push(...ip.params);
-    const matterOk = `((t.dossier_id IS NULL OR EXISTS (SELECT 1 FROM dossier dd WHERE dd.id = t.dossier_id AND ${dp.sql}))
-        AND (t.correspondence_item_id IS NULL OR EXISTS (SELECT 1 FROM correspondence_item ii WHERE ii.id = t.correspondence_item_id AND ${ip.sql})))`;
-    const visible = `(${involved} OR ((${manager ? 'true' : 'false'} OR ${headOf}) AND ${matterOk}))`;
+    const visible = v.sql;
     const clauses = [visible];
     switch (query.scope ?? 'all') {
       case 'my':

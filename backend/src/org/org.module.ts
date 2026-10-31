@@ -6,7 +6,7 @@ import { RequireRoles } from '../auth/require-roles.decorator';
 import { actorFrom } from '../common/actor';
 import { OrgService } from './org.service';
 
-const KINDS = ['CABINET', 'DIRECTORATE', 'DEPARTMENT', 'DISTRICT', 'OFFICE', 'SERVICE'];
+const KINDS = ['CABINET', 'DIRECTORATE', 'SUB_DIRECTORATE', 'DEPARTMENT', 'DISTRICT', 'OFFICE', 'SERVICE'];
 const ROLE_CODES = ['MINISTER', 'DIRECTEUR', 'ONDER_DIRECTEUR', 'SUPPORT_STAFF', 'SYS_ADMIN', 'AUDITOR', 'RECORDS_MANAGER'];
 const SIGNED_IN = [...ROLE_CODES];
 

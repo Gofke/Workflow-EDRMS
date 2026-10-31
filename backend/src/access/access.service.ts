@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { BUSINESS_ROLES } from '../common/actor';
+import { BUSINESS_ROLES, todayInSuriname } from '../common/actor';
 import { SettingsService } from '../settings/settings.service';
 
 export type Level = 'OPEN' | 'INTERNAL' | 'CONFIDENTIAL' | 'SECRET';
@@ -78,22 +78,7 @@ export class AccessService {
   dossierPredicate(p: AccessProfile, alias: string, next: number): { sql: string; params: unknown[] } {
     if (!p.business) return { sql: 'false', params: [] };
     const me = `$${next}`;
-    const relation = `(
-         ${alias}.created_by_account_id = ${me}
-      OR EXISTS (SELECT 1 FROM responsibility_assignment ra_x
-                  WHERE ra_x.dossier_id = ${alias}.id AND ra_x.superseded_at IS NULL
-                    AND ra_x.responsible_account_id = ${me})
-      OR EXISTS (SELECT 1 FROM record_access_grant g_x
-                  WHERE g_x.subject_type = 'DOSSIER' AND g_x.subject_id = ${alias}.id
-                    AND g_x.account_id = ${me} AND g_x.revoked_at IS NULL)
-      OR EXISTS (SELECT 1 FROM workflow_event we_x
-                  WHERE we_x.dossier_id = ${alias}.id AND we_x.reviewer_account_id = ${me})
-      OR EXISTS (SELECT 1 FROM task t_x
-                  WHERE t_x.dossier_id = ${alias}.id
-                    AND (t_x.assignee_account_id = ${me} OR t_x.owner_account_id = ${me}))
-      OR EXISTS (SELECT 1 FROM advice_request ar_x
-                  WHERE ar_x.dossier_id = ${alias}.id AND ar_x.requested_from_account_id = ${me})
-    )`;
+    const relation = dossierRelation(alias, me);
     const unit = p.unitId && p.unitSeesConfidential ? `${alias}.owning_unit_id = $${next + 1}` : 'false';
     const sql = `(
          ${alias}.classification IN ('OPEN','INTERNAL')
@@ -109,19 +94,7 @@ export class AccessService {
   itemPredicate(p: AccessProfile, alias: string, next: number): { sql: string; params: unknown[] } {
     if (!p.business) return { sql: 'false', params: [] };
     const me = `$${next}`;
-    const relation = `(
-         ${alias}.created_by_account_id = ${me}
-      OR EXISTS (SELECT 1 FROM record_access_grant g_y
-                  WHERE g_y.subject_type = 'ITEM' AND g_y.subject_id = ${alias}.id
-                    AND g_y.account_id = ${me} AND g_y.revoked_at IS NULL)
-      OR EXISTS (SELECT 1 FROM dossier_link dl_y
-                   JOIN responsibility_assignment ra_y
-                     ON ra_y.dossier_id = dl_y.dossier_id AND ra_y.superseded_at IS NULL
-                  WHERE dl_y.correspondence_item_id = ${alias}.id AND ra_y.responsible_account_id = ${me})
-      OR EXISTS (SELECT 1 FROM task t_y
-                  WHERE t_y.correspondence_item_id = ${alias}.id
-                    AND (t_y.assignee_account_id = ${me} OR t_y.owner_account_id = ${me}))
-    )`;
+    const relation = itemRelation(alias, me);
     const unit = p.unitId && p.unitSeesConfidential ? `${alias}.owning_unit_id = $${next + 1}` : 'false';
     const sql = `(
          ${alias}.classification IN ('OPEN','INTERNAL')
@@ -187,6 +160,90 @@ export class AccessService {
     return new Set(rows.map((r) => r.id));
   }
 
+  // ------------------------------------------------------------ line of command
+
+  /**
+   * The part of the ministry a person answers for — their line of command:
+   *
+   *   Minister, records manager   the whole ministry
+   *   head of a unit              that unit and every unit under it (a Directeur
+   *                               heads a directorate, an Onder-Directeur a
+   *                               sub-directorate, a head a department)
+   *   Directeur / Onder-Directeur who heads no unit: their own unit and below
+   *   everyone else               their own unit
+   *
+   * A stand-in (out of office) temporarily answers for the absent person's line
+   * as well. Records a person is involved in are always in their line (see the
+   * line predicates). This narrows what the assistant reports on; it never
+   * widens what someone may see — every query also applies the record
+   * permission predicates above.
+   */
+  async lineScope(p: AccessProfile, withStandIns = true): Promise<LineScope> {
+    if (p.roles.some((r) => WHOLE_MINISTRY_ROLES.includes(r))) return { all: true, unitIds: [], rootUnitIds: [] };
+    const own = await this.ownLine(p);
+    if (!withStandIns) return own;
+    // Standing in adds the absent person's line to one's own; it never replaces it.
+    const absent: { account_id: string }[] = await this.dataSource.query(
+      `SELECT DISTINCT o.account_id FROM out_of_office o
+        WHERE o.stand_in_account_id = $1 AND o.ended_at IS NULL
+          AND o.starts_on <= $2::date AND o.ends_on >= $2::date`,
+      [p.accountId, todayInSuriname()],
+    );
+    const units = new Set(own.unitIds);
+    const roots = new Set(own.rootUnitIds);
+    for (const a of absent) {
+      const theirs = await this.lineScope(await this.profile(a.account_id), false);
+      if (theirs.all) return { all: true, unitIds: [], rootUnitIds: [] };
+      theirs.unitIds.forEach((u) => units.add(u));
+      theirs.rootUnitIds.forEach((u) => roots.add(u));
+    }
+    return { all: false, unitIds: [...units], rootUnitIds: [...roots] };
+  }
+
+  /** The person's own line, without stand-ins. */
+  private async ownLine(p: AccessProfile): Promise<LineScope> {
+    const headed: { id: string }[] = await this.dataSource.query(`SELECT id FROM organisational_unit WHERE is_active AND head_account_id = $1`, [p.accountId]);
+    const leads = headed.length > 0 || p.roles.some((r) => LINE_MANAGER_ROLES.includes(r));
+    // A head's line starts at the units they head; anyone else's at their own unit.
+    const rootIds = headed.length ? headed.map((r) => r.id) : p.unitId ? [p.unitId] : [];
+    if (!leads) return { all: false, unitIds: rootIds, rootUnitIds: rootIds };
+    const below: { id: string }[] = rootIds.length
+      ? await this.dataSource.query(
+          `WITH RECURSIVE line AS (
+             SELECT id FROM organisational_unit WHERE id = ANY($1::uuid[])
+             UNION
+             SELECT u.id FROM organisational_unit u JOIN line l ON u.parent_unit_id = l.id
+           ) SELECT id FROM line`,
+          [rootIds],
+        )
+      : [];
+    return { all: false, unitIds: below.map((r) => r.id), rootUnitIds: rootIds };
+  }
+
+  /** Dossiers in the person's line: owned by a unit in it, or involving them. */
+  lineDossierPredicate(p: AccessProfile, scope: LineScope, alias: string, next: number): { sql: string; params: unknown[] } {
+    if (scope.all) return { sql: 'true', params: [] };
+    return {
+      sql: `(${alias}.owning_unit_id = ANY($${next}::uuid[]) OR ${dossierRelation(alias, `$${next + 1}`)})`,
+      params: [scope.unitIds, p.accountId],
+    };
+  }
+
+  /** Letters in the person's line: owned by a unit in it, or involving them. */
+  lineItemPredicate(p: AccessProfile, scope: LineScope, alias: string, next: number): { sql: string; params: unknown[] } {
+    if (scope.all) return { sql: 'true', params: [] };
+    return {
+      sql: `(${alias}.owning_unit_id = ANY($${next}::uuid[]) OR ${itemRelation(alias, `$${next + 1}`)})`,
+      params: [scope.unitIds, p.accountId],
+    };
+  }
+
+  /** Accounts in the person's line (for "who works on what"). */
+  lineAccountPredicate(scope: LineScope, alias: string, next: number): { sql: string; params: unknown[] } {
+    if (scope.all) return { sql: 'true', params: [] };
+    return { sql: `${alias}.organisational_unit_id = ANY($${next}::uuid[])`, params: [scope.unitIds] };
+  }
+
   /** Records that someone opened a record. Append-only. */
   async recordView(accountId: string, subjectType: 'DOSSIER' | 'ITEM' | 'DOCUMENT' | 'TASK', subjectId: string, label: string, kind = 'OPENED'): Promise<void> {
     await this.dataSource.query(
@@ -199,4 +256,55 @@ export class AccessService {
 
 export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value ?? '');
+}
+
+/** Roles that answer for the whole ministry. */
+export const WHOLE_MINISTRY_ROLES = ['MINISTER', 'RECORDS_MANAGER'];
+/** Roles that lead a line even when no unit names them as its head. */
+export const LINE_MANAGER_ROLES = ['DIRECTEUR', 'ONDER_DIRECTEUR'];
+
+export interface LineScope {
+  /** The whole ministry. */
+  all: boolean;
+  /** Every unit in the line. */
+  unitIds: string[];
+  /** The units at the top of the line (headed, or the person's own). */
+  rootUnitIds: string[];
+}
+
+/** A person's involvement in a dossier: created, responsible, granted, reviewer, task, advice. */
+function dossierRelation(alias: string, me: string): string {
+  return `(
+         ${alias}.created_by_account_id = ${me}
+      OR EXISTS (SELECT 1 FROM responsibility_assignment ra_x
+                  WHERE ra_x.dossier_id = ${alias}.id AND ra_x.superseded_at IS NULL
+                    AND ra_x.responsible_account_id = ${me})
+      OR EXISTS (SELECT 1 FROM record_access_grant g_x
+                  WHERE g_x.subject_type = 'DOSSIER' AND g_x.subject_id = ${alias}.id
+                    AND g_x.account_id = ${me} AND g_x.revoked_at IS NULL)
+      OR EXISTS (SELECT 1 FROM workflow_event we_x
+                  WHERE we_x.dossier_id = ${alias}.id AND we_x.reviewer_account_id = ${me})
+      OR EXISTS (SELECT 1 FROM task t_x
+                  WHERE t_x.dossier_id = ${alias}.id
+                    AND (t_x.assignee_account_id = ${me} OR t_x.owner_account_id = ${me}))
+      OR EXISTS (SELECT 1 FROM advice_request ar_x
+                  WHERE ar_x.dossier_id = ${alias}.id AND ar_x.requested_from_account_id = ${me})
+    )`;
+}
+
+/** A person's involvement in a letter: created, granted, responsible for its matter, task. */
+function itemRelation(alias: string, me: string): string {
+  return `(
+         ${alias}.created_by_account_id = ${me}
+      OR EXISTS (SELECT 1 FROM record_access_grant g_y
+                  WHERE g_y.subject_type = 'ITEM' AND g_y.subject_id = ${alias}.id
+                    AND g_y.account_id = ${me} AND g_y.revoked_at IS NULL)
+      OR EXISTS (SELECT 1 FROM dossier_link dl_y
+                   JOIN responsibility_assignment ra_y
+                     ON ra_y.dossier_id = dl_y.dossier_id AND ra_y.superseded_at IS NULL
+                  WHERE dl_y.correspondence_item_id = ${alias}.id AND ra_y.responsible_account_id = ${me})
+      OR EXISTS (SELECT 1 FROM task t_y
+                  WHERE t_y.correspondence_item_id = ${alias}.id
+                    AND (t_y.assignee_account_id = ${me} OR t_y.owner_account_id = ${me}))
+    )`;
 }
