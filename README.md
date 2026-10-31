@@ -1,4 +1,4 @@
-# JusPol EDRMS — V0.3.0 (Phase 3)
+# JusPol EDRMS — V0.4.0
 
 Records, case and task management for the Ministry of Justice and Police,
 Suriname. Phase 3 merges the two earlier panels into one system:
@@ -19,7 +19,16 @@ server and other ministries, notifications by e-mail, SMS and push, and an
 installable app for phones and tablets. The interface is Dutch, with English
 available, and has light, dark and high-contrast themes.
 
-The feature document `JusPol-EDRMS-V0.3.0-Features.pdf` describes every
+V0.4.0 adds **"Vraag de assistent"**: a chat panel like ChatGPT on every page,
+on Google Gemini (free tier first), that answers any question about the work
+from the live data — but only what the person may see, within their line of
+command: the Minister about the whole ministry, a Directeur about the
+directorate, an Onder-Directeur about the sub-directorate, a head of
+department and an employee about their department. The organisation now has
+sub-directorates (Minister → directorates → sub-directorates → departments →
+employees).
+
+The feature document `JusPol-EDRMS-V0.4.0-Features.pdf` describes every
 feature with a screenshot. This README is for whoever installs and runs it.
 
 | | |
@@ -28,31 +37,70 @@ feature with a screenshot. This README is for whoever installs and runs it.
 | Frontend | React 18, TypeScript, Vite; installable PWA |
 | Sessions | Server-side in PostgreSQL, HttpOnly + Secure cookie, optional two-step verification |
 | Seals | Ed25519 system seal with QR code and public check page |
-| Assistant | Built-in engine (no internet, no subscription); optional local Ollama model |
+| Assistant | Chat panel on Google Gemini (free tier) with role- and line-filtered read-only tools; built-in offline engine as fallback; Ollama, OpenAI-compatible or Anthropic by settings |
 | Documents | Content-addressed storage (SHA-256), OCR in Dutch and English, virus scan hook |
 
-## The assistant (AI) — free and on the ministry's own server
+## The assistant (AI)
+
+### "Vraag de assistent" — the panel (V0.4.0)
+
+Ask anything, in Dutch or English: *Wat staat er vandaag voor mij klaar?*,
+*Hoeveel open zaken heeft elke afdeling in mijn directoraat?*, *Welke zaken
+lopen risico?*, *Wie werkt er bij Juridische Zaken?*, *Hoe registreer ik een
+brief?*. The model (Gemini) decides which read-only tools to use; the tools
+run on the ministry server **as the person asking**, with the same permission
+rules as the screens plus the person's line of command. Answers are shown as
+safe Markdown with cards that link to the records.
+
+What reaches Google on the free tier: numbers, statuses, dates, deadlines,
+unit names and the names of the officials handling the work. Never subjects,
+senders, document text or confidential records — those are shown to the
+person in cards by the server itself. Phone numbers, e-mail addresses and ID
+numbers typed into a question are removed before it is sent. The audit log
+records who asked, when, which tools ran and the result — never the question.
+
+Turning it on:
+
+1. Get a key in Google AI Studio (free).
+2. On the server, in the settings file (never in git, the database or a document):
+   ```
+   AI_PROVIDER=gemini
+   AI_MODEL=gemini-flash-latest
+   AI_FALLBACK_MODELS=gemini-flash-lite-latest
+   AI_API_KEY=<the key>
+   ```
+3. Restart the API. Under **Beheer → Assistent** tick "Assistentpaneel (vraag alles)".
+   The screen shows which values the server fixes and whether a key is present.
+
+Without a key the panel still works with the built-in offline assistant. To
+switch the AI off at once, remove `AI_API_KEY` and restart. Limits: 30
+questions per person per hour (setting), 60 requests per address per minute,
+6 tool rounds and 80 seconds per question.
+
+Documents: `docs/ai/BUSINESS-DOCUMENT.md`, `docs/ai/DESIGN.md` (role → tool
+matrix, data classes, API contract), `docs/ai/AUDIT.md` (audit document and
+scenarios AU-01…AU-35), `docs/ai/EVALUATION.md` (40 + 40 questions) and the
+tester sheet `docs/JusPol-EDRMS-V0.4.0-AI-Tester-Sheet.xlsx`.
+
+### The built-in assistant — free and on the ministry's own server
 
 The built-in assistant needs no internet connection, no account and no
 subscription. It reads only what the person asking may see, proposes, and
 leaves every decision to a person; each suggestion and what was done with it
-is recorded. It can:
+is recorded. It answers in the panel when no language model is configured or
+reachable, and it handles requests that propose a change (a task, tasks from
+meeting notes) so that nothing happens without confirmation. It can also:
 
-- chat on every page: what is waiting for me, find letters and matters,
-  summarise a matter, draft a reply, prepare a task, explain the system;
-- answer questions in plain Dutch or English ("Welke brieven van de Politie
-  kwamen deze maand binnen?");
 - propose registration fields from a scan, recognise deadlines in working days
   (Surinamese holidays included), spot near-duplicate letters and suggest the
   handling department;
-- flag matters at risk of missing their deadline, with the reasons;
-- turn meeting notes into tasks for the right people.
+- summarise a matter, draft a reply, flag matters at risk of missing their
+  deadline, turn meeting notes into tasks.
 
-Optionally, the administrator connects a free open-source model running on a
-ministry server (Ollama with e.g. Llama or Mistral) under **Beheer → Assistent**.
-It then writes more fluently and can translate. The built-in engine stays the
-fallback. An external paid service can also be chosen, but confidential and
-secret records never go to it.
+Optionally, the administrator connects a free open-source model on a ministry
+server (Ollama with e.g. Llama or Mistral) under **Beheer → Assistent**; then
+open and internal records may also be sent to it (data policy "records").
+Confidential and secret records never go to a model outside the network.
 
 ## Installing
 
@@ -106,8 +154,17 @@ npm run build               # output in frontend/dist
   `deploy/test-backup-restore.sh` backs up, restores into a separate database
   and proves the copy is identical (rows, every file's SHA-256, audit chain).
 
+- `deploy/pack.sh` builds a release; `deploy/install.sh` installs or updates one
+  environment (staging or production) on Ubuntu: its own service user,
+  folder, settings file (640) and nginx site; refuses an address or port used
+  by another site and the production key on staging; checks health and rolls
+  back automatically when a new version does not start; obtains the
+  certificate (run again to retry). `deploy/install.sh status --env staging`
+  shows service, log and health. `deploy/test-install.sh` tests it with stubs.
+
 Check `https://<server>/api/health`:
-`{"status":"ok","version":"0.3.0","database":"reachable"}`.
+`{"status":"ok","version":"0.4.0","database":"reachable"}` and
+`https://<server>/api/v1/health` (environment, version, assistant state).
 
 ## Demonstration data
 
@@ -116,8 +173,8 @@ cd backend
 npm run seed:demo -- --reset   # ERASES the database in .env — never on a live system
 ```
 
-Builds a realistic ministry through the application's own API: 11
-departments and offices, 19 accounts, 66 letters with their documents (scans read by OCR),
+Builds a realistic ministry through the application's own API: the Kabinet,
+two directorates with four sub-directorates, departments and offices (16 units), 22 accounts, 66 letters with their documents (scans read by OCR),
 25 matters with decisions, 29 tasks, advice, replies with seals, WijSamen
 reports and an exchange with another ministry, spread over ten months. All
 people and letters are invented. Every account uses the `SEED_PASSWORD`.
@@ -125,9 +182,12 @@ people and letters are invented. Every account uses the `SEED_PASSWORD`.
 | Account | Role |
 |---|---|
 | minister@juspol.test | Minister (R. Dijkstra) |
-| directeur@juspol.test | Directeur (M. Sardjoe) |
-| onderdirecteur@juspol.test | Onder-Directeur (A. Boldewijn) |
-| dualrole@juspol.test | Onder-Directeur and staff (S. Hiwat) |
+| directeur@juspol.test | Directeur Justitie (M. Sardjoe) |
+| directeur2@juspol.test | Directeur Bedrijfsvoering en Politie (C. Doelwijt) |
+| onderdirecteur@juspol.test | Onder-Directeur Justitiële Inrichtingen (A. Boldewijn) |
+| dualrole@juspol.test | Onder-Directeur Juridische Zaken en Vreemdelingenzaken, and staff (S. Hiwat) |
+| onderdirecteur2@juspol.test | Onder-Directeur Bedrijfsvoering (F. Karijopawiro) |
+| onderdirecteur3@juspol.test | Onder-Directeur Politie en Openbare Orde (M. Wijngaarde) |
 | assistant1@juspol.test, assistant2@juspol.test | Registry and Cabinet staff |
 | kartodikromo@, sabajo@, chin@, vlijter@, ramdin@, pengel@juspol.test | Heads of department |
 | wongsodikromo@, doekhie@, oemrawsingh@juspol.test | Department staff |
@@ -145,10 +205,14 @@ cd frontend && npm test                                     # component tests
 
 The integration suite runs against a real, dedicated test database, because
 much of what it protects (append-only audit rules, the hash chain, triggers,
-constraints) lives in the database. 24 spec files cover authentication,
+constraints) lives in the database. 26 spec files (379 tests) cover authentication,
 administration, registration, dossiers, documents, delegation, workflow,
 timeline, tasks, approvals, case files, letters and seals, notifications,
 search and dashboards, the assistant, oversight and integrations. The
+assistant's tests use fakes only — a scripted model and a fake Gemini server;
+never a real model or a real key — and include leak tests with planted text,
+the tool matrix per role, the line of command, error mapping and the audit
+scenarios. The
 component tests check that each screen offers the right controls to the right
 person and sends what the person chose.
 
@@ -158,7 +222,10 @@ person and sends what the person chose.
   account key. It is not used here and must be **revoked in the Google Cloud
   console**; treat it as exposed.
 - No secrets are stored in the database or in this repository: `.env`, the
-  keys folder and the document folders are excluded.
+  keys folder and the document folders are excluded. The Gemini key lives only
+  in the server's settings file; staging and production use different keys,
+  and a staging server refuses to start with the production key or database
+  (`PRODUCTION_FINGERPRINTS`).
 - System administration never grants access to record content; the auditor
   reads the log, not the records.
 
@@ -167,12 +234,12 @@ person and sends what the person chose.
 ```
 backend/src/records, documents, workflow, delegation, timeline   Delivery 1 core
 backend/src/tasks, approvals, casefiles, letters, deadlines       Phase 3 work
-backend/src/ai                     the assistant: engine/ (built-in), llm.ts (optional model)
+backend/src/ai                     the assistant: agent/ (panel, tools, providers, loop), engine/ (built-in), llm.ts
 backend/src/oversight, integrations, dashboard, search, security  oversight and links
 backend/src/migrations             schema history, the only way the schema changes
 backend/src/seed                   pilot accounts and demonstration data
 backend/test                       integration suite
 frontend/src/pages, shell, ui      the interface; *.test.tsx component tests
-deploy/                            nginx, systemd, backup and restore
-docs/                              delivery notes and tester guides
+deploy/                            install, pack, nginx, systemd, backup and restore
+docs/                              delivery notes and tester guides; docs/ai the assistant's documents
 ```
