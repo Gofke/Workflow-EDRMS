@@ -14,6 +14,7 @@ import { SettingsModule } from './settings/settings.module';
 import { AccessModule } from './access/access.module';
 import { OrgModule } from './org/org.module';
 import { TasksModule } from './tasks/tasks.module';
+import { ProjectsModule } from './projects/projects.module';
 import { DeadlinesModule } from './deadlines/deadlines.module';
 import { LettersModule } from './letters/letters.module';
 import { CaseFilesModule } from './casefiles/casefiles.module';
@@ -24,7 +25,7 @@ import { OversightModule } from './oversight/oversight.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, DeadlinesModule, LettersModule, CaseFilesModule, ApprovalsModule, DashboardModule,
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), CoreModule, AuthModule, SettingsModule, AccessModule, OrgModule, TasksModule, ProjectsModule, DeadlinesModule, LettersModule, CaseFilesModule, ApprovalsModule, DashboardModule,
     AiModule, OversightModule, IntegrationsModule, AdminModule, RecordsModule, DocumentsModule, DelegationModule, WorkflowModule, TimelineModule],
   controllers: [HealthController],
 })

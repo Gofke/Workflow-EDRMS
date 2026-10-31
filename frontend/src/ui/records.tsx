@@ -18,6 +18,9 @@ export interface TaskView {
   createdBy: { accountId: string; name: string };
   dossier: { id: string; identity: string; subject: string } | null;
   item: { id: string; identity: string | null; subject: string } | null;
+  /** Set when the task is a ticket in a project phase. */
+  project?: { id: string; reference: string; name: string; milestoneId: string; milestoneName: string } | null;
+  startDate?: string | null;
   parentTaskId: string | null;
   parentReference: string | null;
   checklistDone: number;
@@ -54,6 +57,7 @@ export function TaskRow({ task, showAssignee = true }: { task: TaskView; showAss
           <span>{task.reference}</span>
           {showAssignee && <span>{task.assignee.name}</span>}
           {task.dossier && <span>{task.dossier.identity}</span>}
+          {task.project && <span>{task.project.reference}</span>}
           {task.checklistTotal > 0 && (
             <span>
               <ListChecks size={13} aria-hidden="true" /> {task.checklistDone}/{task.checklistTotal}

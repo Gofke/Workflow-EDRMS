@@ -34,6 +34,10 @@ const KINDS: Record<string, [string, string]> = {
   OUT_OF_OFFICE: ['Ik vervang iemand', 'I am standing in for someone'],
   WEEKLY_REPORT: ['Weekrapport', 'Weekly report'],
   INTAKE_RECEIVED: ['Post binnengekomen via e-mail of WijSamen', 'Post received by e-mail or WijSamen'],
+  PROJECT_ROLE: ['Ik krijg een rol in een project', 'I am given a role in a project'],
+  BUSINESS_CASE_SUBMITTED: ['Een business case wacht op mijn goedkeuring', 'A business case awaits my approval'],
+  BUSINESS_CASE_DECIDED: ['Over mijn business case is beslist', 'My business case was decided'],
+  PROJECT_PHASE: ['Een project gaat naar een volgende fase', 'A project moves to its next phase'],
 };
 
 export default function ProfilePage() {

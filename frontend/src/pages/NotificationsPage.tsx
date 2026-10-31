@@ -1,4 +1,4 @@
-import { AlarmClock, Bell, CheckCheck, ClipboardCheck, FileInput, Gavel, MessageSquare, ShieldAlert, UserCheck } from 'lucide-react';
+import { AlarmClock, Bell, CheckCheck, ClipboardCheck, FileInput, FolderKanban, Gavel, MessageSquare, ShieldAlert, UserCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -17,6 +17,7 @@ function iconFor(kind: string) {
   if (kind === 'RESPONSIBILITY_ASSIGNED' || kind === 'OUT_OF_OFFICE') return UserCheck;
   if (kind === 'SECURITY_ALERT') return ShieldAlert;
   if (kind === 'INTAKE_RECEIVED') return FileInput;
+  if (kind.startsWith('PROJECT') || kind.startsWith('BUSINESS_CASE')) return FolderKanban;
   return Bell;
 }
 

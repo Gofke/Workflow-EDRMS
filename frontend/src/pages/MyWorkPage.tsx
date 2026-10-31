@@ -1,4 +1,4 @@
-import { Gavel, MessageCircleQuestion, Plus, Sparkles } from 'lucide-react';
+import { FolderKanban, Gavel, MessageCircleQuestion, Plus, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { ago, date, longDate } from '../lib/format';
@@ -22,8 +22,10 @@ interface MyWork {
     overdueMatters: number;
     draftsToRegister: number;
     unreadNotifications: number;
+    projectDecisions?: number;
   };
   tasks: TaskView[];
+  projectDecisions?: { id: string; reference: string; name: string; kind: 'BUSINESS_CASE' | 'CLOSURE'; since: string | null }[];
   reviewQueue: { dossierId: string; dossierIdentity: string; subject: string; submittedByName: string; submittedAt: string }[];
   advice: { id: string; question: string; dueDate: string | null; dossierId: string; dossierIdentity: string; subject: string; requestedByName: string }[];
   responsible: { id: string; dossierIdentity: string; subject: string; processingState: string; dueDate: string | null; overdue: boolean }[];
@@ -101,6 +103,32 @@ export default function MyWorkPage() {
                             </span>
                           </span>
                           <span className="btn sm">{t('Beoordelen', 'Review')}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              )}
+
+              {(data.projectDecisions ?? []).length > 0 && (
+                <Panel title={t('Projecten wachten op u als opdrachtgever', 'Projects awaiting you as owner')} flush>
+                  <ul className="list">
+                    {(data.projectDecisions ?? []).map((r) => (
+                      <li key={`${r.id}-${r.kind}`}>
+                        <Link to={`/projecten/${r.id}${r.kind === 'BUSINESS_CASE' ? '?tab=businesscase' : ''}`} className="list-link">
+                          <FolderKanban size={18} style={{ marginTop: 3, color: 'var(--warn)', flex: 'none' }} aria-hidden="true" />
+                          <span className="grow stack" style={{ gap: 3 }}>
+                            <span className="list-title">{r.name}</span>
+                            <span className="meta">
+                              <span>{r.reference}</span>
+                              <span>
+                                {r.kind === 'BUSINESS_CASE'
+                                  ? `${t('business case ter goedkeuring', 'business case for approval')}${r.since ? `, ${ago(r.since, language)}` : ''}`
+                                  : t('alle tickets klaar: klaar om af te tekenen', 'every ticket done: ready to sign off')}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="btn sm">{r.kind === 'BUSINESS_CASE' ? t('Beoordelen', 'Review') : t('Aftekenen', 'Sign off')}</span>
                         </Link>
                       </li>
                     ))}

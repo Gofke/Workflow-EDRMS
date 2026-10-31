@@ -20,6 +20,7 @@ import { ActionProposal, Person, proposeActions } from './engine/notes';
 import { KeySentence, keySentences } from './engine/summarise';
 import { cosine, detectLanguage, excerpt, idfOf, trigramSimilarity, vector } from './engine/text';
 import { complete, isLocalAddress, LlmError, Turn } from './llm';
+import { notConfidentialTicket } from '../projects/ticket-rules';
 
 export type AiFeature = keyof Settings['ai']['features'];
 
@@ -396,7 +397,7 @@ export class AiService {
       let person: { accountId: string; name: string; openTasks: number; basis: string } | null = null;
       if (personId) {
         const [w] = await this.dataSource.query(
-          `SELECT p.full_name AS name, (SELECT count(*)::int FROM task t WHERE t.assignee_account_id = a.id AND t.status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW') AND t.archived_at IS NULL) AS open
+          `SELECT p.full_name AS name, (SELECT count(*)::int FROM task t WHERE t.assignee_account_id = a.id AND t.status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW') AND t.archived_at IS NULL AND ${notConfidentialTicket('t')}) AS open
              FROM account a JOIN person p ON p.id = a.person_id WHERE a.id = $1 AND a.is_enabled`,
           [personId],
         );

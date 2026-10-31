@@ -228,6 +228,7 @@ const ENTRIES_SQL = `
           LEFT JOIN account obacc ON obacc.id = te.on_behalf_of_account_id
           LEFT JOIN person obp ON obp.id = obacc.person_id
          WHERE t.dossier_id = $1 AND te.event_type IN ('CREATED','COMPLETED','CANCELLED','ASSIGNED','REJECTED')
+           AND t.project_milestone_id IS NULL -- project tickets are need-to-know, never on a matter's timeline
 
         UNION ALL
         -- V0.3.0: advice asked and given

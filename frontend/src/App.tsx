@@ -15,6 +15,8 @@ const DossierListPage = lazy(() => import('./pages/DossierListPage'));
 const DossierDetailPage = lazy(() => import('./pages/DossierDetailPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
 const TaskDetailPage = lazy(() => import('./pages/TaskDetailPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const ReviewPage = lazy(() => import('./pages/ReviewPage'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const OverviewPage = lazy(() => import('./pages/OverviewPage'));
@@ -74,6 +76,8 @@ function Private() {
         <Route path="/zaken/:id" element={page(<DossierDetailPage />)} />
         <Route path="/taken" element={page(<TasksPage />)} />
         <Route path="/taken/:id" element={page(<TaskDetailPage />)} />
+        <Route path="/projecten" element={page(<ProjectsPage />)} />
+        <Route path="/projecten/:id" element={page(<ProjectDetailPage />)} />
         <Route path="/goedkeuringen" element={page(<ReviewPage />)} />
         <Route path="/zoeken" element={page(<SearchPage />)} />
         <Route path="/overzicht" element={page(<OverviewPage />)} />

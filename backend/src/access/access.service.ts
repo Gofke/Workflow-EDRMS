@@ -245,7 +245,7 @@ export class AccessService {
   }
 
   /** Records that someone opened a record. Append-only. */
-  async recordView(accountId: string, subjectType: 'DOSSIER' | 'ITEM' | 'DOCUMENT' | 'TASK', subjectId: string, label: string, kind = 'OPENED'): Promise<void> {
+  async recordView(accountId: string, subjectType: 'DOSSIER' | 'ITEM' | 'DOCUMENT' | 'TASK' | 'PROJECT', subjectId: string, label: string, kind = 'OPENED'): Promise<void> {
     await this.dataSource.query(
       `INSERT INTO record_view_event (account_id, subject_type, subject_id, subject_label, view_kind)
        VALUES ($1, $2, $3, $4, $5)`,

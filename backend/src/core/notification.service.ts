@@ -3,13 +3,14 @@ import { DataSource } from 'typeorm';
 import { SettingsService } from '../settings/settings.service';
 import { Mailer, PushSender, SmsSender } from './delivery';
 import { DEFAULT_CHANNELS, NotificationKind, render } from './notification-templates';
+import { TICKET_READERS } from '../projects/ticket-rules';
 
 export interface NotifyInput {
   recipients: (string | null | undefined)[];
   kind: NotificationKind;
   params: Record<string, string | number | null | undefined>;
   link?: string;
-  subjectType?: 'TASK' | 'DOSSIER' | 'ITEM' | 'ADVICE' | 'ACCOUNT';
+  subjectType?: 'TASK' | 'DOSSIER' | 'ITEM' | 'ADVICE' | 'ACCOUNT' | 'PROJECT';
   subjectId?: string;
   /** The person who caused it; they are not notified of their own action. */
   actorAccountId?: string | null;
@@ -49,10 +50,20 @@ export class NotificationService {
   ) {}
 
   async notify(input: NotifyInput): Promise<number> {
-    const ids = [...new Set(input.recipients.filter((id): id is string => !!id))].filter(
+    let ids = [...new Set(input.recipients.filter((id): id is string => !!id))].filter(
       (id) => id !== input.actorAccountId,
     );
     if (ids.length === 0) return 0;
+    // Projects and their tickets are need-to-know: a notice about a ticket goes only to
+    // people who may open it (a mention or an old owner outside the project gets nothing).
+    const ticket =
+      input.subjectType === 'TASK' && !!input.subjectId &&
+      (await this.dataSource.query(`SELECT 1 FROM task WHERE id = $1 AND project_milestone_id IS NOT NULL`, [input.subjectId])).length > 0;
+    if (ticket) {
+      const allowed = new Set((await this.dataSource.query(TICKET_READERS, [input.subjectId, ids])).map((r: { id: string }) => r.id));
+      ids = ids.filter((id) => allowed.has(id));
+      if (ids.length === 0) return 0;
+    }
     const standIns: { account_id: string; stand_in_account_id: string }[] = await this.dataSource.query(
       `SELECT account_id, stand_in_account_id FROM out_of_office
         WHERE account_id = ANY($1) AND ended_at IS NULL
@@ -61,7 +72,10 @@ export class NotificationService {
       [ids],
     );
     const targets: { id: string; forAbsent: string | null }[] = ids.map((id) => ({ id, forAbsent: null }));
-    for (const s of standIns) {
+    // Projects and their tickets are need-to-know: a stand-in does not stand in on a
+    // project (they get no access to it), so they get no copy either.
+    const needToKnow = input.subjectType === 'PROJECT' || ticket;
+    for (const s of needToKnow ? [] : standIns) {
       if (s.stand_in_account_id !== input.actorAccountId && !ids.includes(s.stand_in_account_id)) {
         targets.push({ id: s.stand_in_account_id, forAbsent: s.account_id });
       }

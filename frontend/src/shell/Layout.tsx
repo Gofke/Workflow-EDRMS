@@ -1,14 +1,19 @@
 import {
   Archive,
+  BarChart3,
   Bell,
   BookOpen,
   CheckSquare,
   ClipboardCheck,
+  Compass,
+  Contrast,
+  FolderKanban,
   FolderOpen,
   Gauge,
   HelpCircle,
   Home,
   Inbox,
+  Languages,
   LogOut,
   Menu,
   Moon,
@@ -21,10 +26,6 @@ import {
   Type,
   User,
   Users,
-  BarChart3,
-  Contrast,
-  Languages,
-  Compass,
 } from 'lucide-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ interface Counts {
   adviceToGive: number;
   draftsToRegister: number;
   unreadNotifications: number;
+  projectDecisions?: number;
 }
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -102,6 +104,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: '/post', icon: <Inbox size={19} />, label: t('Post', 'Mail'), count: counts?.draftsToRegister, show: business, tour: 'post' },
     { to: '/zaken', icon: <FolderOpen size={19} />, label: t('Zaken', 'Matters'), show: business },
     { to: '/taken', icon: <CheckSquare size={19} />, label: t('Taken', 'Tasks'), count: counts?.openTasks, show: business },
+    { to: '/projecten', icon: <FolderKanban size={19} />, label: t('Projecten', 'Projects'), count: counts?.projectDecisions, show: business, tour: 'projects' },
     { to: '/goedkeuringen', icon: <ClipboardCheck size={19} />, label: t('Beoordelen', 'Review'), count: reviews, show: business },
     { to: '/zoeken', icon: <Search size={19} />, label: t('Zoeken', 'Search'), show: business },
     { group: t('Leiding', 'Management'), to: '/overzicht', icon: <Gauge size={19} />, label: t('Bestuurlijk overzicht', 'Management overview'), show: manager, tour: 'overview' },
@@ -146,7 +149,7 @@ export function Layout({ children }: { children: ReactNode }) {
               ))}
           </nav>
           <div className="rail-foot">
-            {t('Versie', 'Version')} 0.4.1
+            {t('Versie', 'Version')} 0.5.0
             <br />
             {branding?.tagline}
           </div>

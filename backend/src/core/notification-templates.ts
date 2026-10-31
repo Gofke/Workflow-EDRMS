@@ -24,13 +24,18 @@ export type NotificationKind =
   | 'OUT_OF_OFFICE'
   | 'WEEKLY_REPORT'
   | 'INTAKE_RECEIVED'
+  | 'PROJECT_ROLE'
+  | 'BUSINESS_CASE_SUBMITTED'
+  | 'BUSINESS_CASE_DECIDED'
+  | 'PROJECT_PHASE'
   | 'SYSTEM';
 
 export const ALL_KINDS: NotificationKind[] = [
   'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_COMMENT', 'TASK_MENTION', 'TASK_COMPLETED', 'TASK_REJECTED',
   'TASK_CANCELLED', 'REVIEW_REQUESTED', 'MATTER_RETURNED', 'MATTER_APPROVED', 'MATTER_FINALISED',
   'RESPONSIBILITY_ASSIGNED', 'ADVICE_REQUESTED', 'ADVICE_GIVEN', 'DEADLINE_REMINDER', 'DEADLINE_OVERDUE',
-  'DEADLINE_ESCALATION', 'SECURITY_ALERT', 'OUT_OF_OFFICE', 'WEEKLY_REPORT', 'INTAKE_RECEIVED', 'SYSTEM',
+  'DEADLINE_ESCALATION', 'SECURITY_ALERT', 'OUT_OF_OFFICE', 'WEEKLY_REPORT', 'INTAKE_RECEIVED',
+  'PROJECT_ROLE', 'BUSINESS_CASE_SUBMITTED', 'BUSINESS_CASE_DECIDED', 'PROJECT_PHASE', 'SYSTEM',
 ];
 
 /** Defaults when a person has not chosen otherwise. */
@@ -56,6 +61,10 @@ export const DEFAULT_CHANNELS: Record<NotificationKind, { email: boolean; sms: b
   OUT_OF_OFFICE: { email: false, sms: false, push: true },
   WEEKLY_REPORT: { email: true, sms: false, push: false },
   INTAKE_RECEIVED: { email: false, sms: false, push: true },
+  PROJECT_ROLE: { email: true, sms: false, push: true },
+  BUSINESS_CASE_SUBMITTED: { email: true, sms: false, push: true },
+  BUSINESS_CASE_DECIDED: { email: true, sms: false, push: true },
+  PROJECT_PHASE: { email: false, sms: false, push: true },
   SYSTEM: { email: false, sms: false, push: false },
 };
 
@@ -84,6 +93,10 @@ const nl: Record<NotificationKind, Template> = {
   OUT_OF_OFFICE: { title: (p) => `U vervangt ${p.person}`, body: (p) => `${p.person} is afwezig van ${p.from} tot en met ${p.until}. Meldingen voor ${p.person} komen ook bij u.` },
   WEEKLY_REPORT: { title: () => 'Weekoverzicht', body: (p) => `${p.summary}` },
   INTAKE_RECEIVED: { title: (p) => `Nieuwe binnenkomende post: ${p.subject}`, body: (p) => `Via ${p.channel}. Ter registratie klaargezet.` },
+  PROJECT_ROLE: { title: (p) => `Project ${p.reference}: u bent ${p.role}`, body: (p) => `${p.actor} heeft u ${p.role} gemaakt van het project ${p.name}.` },
+  BUSINESS_CASE_SUBMITTED: { title: (p) => `Business case ter goedkeuring: ${p.name}`, body: (p) => `${p.actor} legt de business case van ${p.reference} aan u voor.` },
+  BUSINESS_CASE_DECIDED: { title: (p) => `Business case ${p.decision}: ${p.name}`, body: (p) => `${p.actor} heeft de business case van ${p.reference} ${p.decision}${p.reason ? `: ${p.reason}` : '.'}` },
+  PROJECT_PHASE: { title: (p) => `Project ${p.reference}: ${p.phase}`, body: (p) => `${p.name}: ${p.change}` },
   SYSTEM: { title: (p) => `${p.title}`, body: (p) => `${p.body ?? ''}` },
 };
 
@@ -109,6 +122,10 @@ const en: Record<NotificationKind, Template> = {
   OUT_OF_OFFICE: { title: (p) => `You are standing in for ${p.person}`, body: (p) => `${p.person} is away from ${p.from} to ${p.until}. Notifications for ${p.person} also reach you.` },
   WEEKLY_REPORT: { title: () => 'Weekly overview', body: (p) => `${p.summary}` },
   INTAKE_RECEIVED: { title: (p) => `New incoming mail: ${p.subject}`, body: (p) => `Via ${p.channel}. Ready to register.` },
+  PROJECT_ROLE: { title: (p) => `Project ${p.reference}: you are ${p.roleEn}`, body: (p) => `${p.actor} made you ${p.roleEn} of the project ${p.name}.` },
+  BUSINESS_CASE_SUBMITTED: { title: (p) => `Business case for approval: ${p.name}`, body: (p) => `${p.actor} submits the business case of ${p.reference} to you.` },
+  BUSINESS_CASE_DECIDED: { title: (p) => `Business case ${p.decisionEn}: ${p.name}`, body: (p) => `${p.actor} ${p.decisionEn} the business case of ${p.reference}${p.reason ? `: ${p.reason}` : '.'}` },
+  PROJECT_PHASE: { title: (p) => `Project ${p.reference}: ${p.phaseEn}`, body: (p) => `${p.name}: ${p.changeEn}` },
   SYSTEM: { title: (p) => `${p.title}`, body: (p) => `${p.body ?? ''}` },
 };
 

@@ -65,6 +65,7 @@ class UpdateTaskDto {
   @IsOptional() @IsUUID('4') ownerAccountId?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID('4', { each: true }) audience?: string[];
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsDateString() dueDate?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsDateString({}, { message: 'Enter a valid start date.' }) startDate?: string | null;
   @IsOptional() @IsIn(PRIORITY) priority?: string;
   @IsOptional() @IsIn(['NONE', 'WEEKLY', 'MONTHLY']) recurrence?: string;
 }

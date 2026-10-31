@@ -294,6 +294,13 @@ export default function TaskDetailPage() {
                 ],
                 [t('Zaak', 'Matter'), task.dossier ? <Link key="z" to={`/zaken/${task.dossier.id}`}>{task.dossier.identity} — {task.dossier.subject}</Link> : '—'],
                 [t('Brief', 'Letter'), task.item ? <span key="i" className="row" style={{ gap: 6 }}><Stamp value={task.item.identity} to={`/post/${task.item.id}`} /> {task.item.subject}</span> : '—'],
+                ...(task.project
+                  ? ([
+                      [t('Project', 'Project'), <Link key="p" to={`/projecten/${task.project.id}`}>{task.project.reference} — {task.project.name}</Link>],
+                      [t('Fase', 'Phase'), task.project.milestoneName],
+                      [t('Start', 'Start'), task.startDate ? longDate(task.startDate, language) : '—'],
+                    ] as [ReactNode, ReactNode][])
+                  : []),
                 [t('Hoofdtaak', 'Parent task'), task.parentTaskId ? <Link key="p" to={`/taken/${task.parentTaskId}`}>{task.parentReference}</Link> : '—'],
                 [t('Aangemaakt', 'Created'), `${dateTime(task.createdAt, language)}, ${task.createdBy.name}`],
               ]}

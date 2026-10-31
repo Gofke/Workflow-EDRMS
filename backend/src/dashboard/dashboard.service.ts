@@ -6,6 +6,7 @@ import { addDays, WorkingDaysService } from '../core/working-days.service';
 import { TasksService } from '../tasks/tasks.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { ApprovalsService } from '../approvals/approvals.service';
+import { notConfidentialTicket } from '../projects/ticket-rules';
 
 const OPEN_TASK = `('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW')`;
 
@@ -60,6 +61,17 @@ export class DashboardService {
       this.approvals.standingIn(accountId),
       this.dataSource.query(`SELECT count(*)::int AS unread FROM notification WHERE account_id = $1 AND read_at IS NULL`, [accountId]),
     ]);
+    // Projects waiting on this person as owner: a business case to decide, a closure to sign off.
+    const projectDecisions: { id: string; reference: string; name: string; kind: 'BUSINESS_CASE' | 'CLOSURE'; since: string | null }[] = await this.dataSource.query(
+      `SELECT p.id, p.reference, p.name, 'BUSINESS_CASE' AS kind, p.bc_submitted_at AS since FROM project p
+        WHERE p.owner_account_id = $1 AND p.status = 'PROPOSED' AND p.business_case_status = 'SUBMITTED'
+       UNION ALL
+       SELECT p.id, p.reference, p.name, 'CLOSURE' AS kind, NULL AS since FROM project p JOIN project_milestone m ON m.project_id = p.id
+        WHERE p.owner_account_id = $1 AND p.status = 'ACTIVE' AND m.status = 'ACTIVE' AND m.gate = 'CLOSURE'
+          AND NOT EXISTS (SELECT 1 FROM task t WHERE t.project_milestone_id = m.id AND t.status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW'))
+       ORDER BY reference`,
+      [accountId],
+    );
     const overdueTasks = tasks.data.filter((t) => t.overdue);
     const dueSoon = tasks.data.filter((t) => !t.overdue && t.dueDate && t.dueDate <= addDays(today, 7));
     return {
@@ -74,8 +86,10 @@ export class DashboardService {
         overdueMatters: responsible.filter((r: { overdue: boolean }) => r.overdue).length,
         draftsToRegister: drafts.length,
         unreadNotifications: unread,
+        projectDecisions: projectDecisions.length,
       },
       tasks: tasks.data,
+      projectDecisions,
       reviewQueue,
       advice,
       responsible,
@@ -97,8 +111,8 @@ export class DashboardService {
          (SELECT count(*)::int FROM dossier WHERE processing_state = 'UNDER_REVIEW') AS "underReview",
          (SELECT count(*)::int FROM correspondence_item WHERE registered_at >= date_trunc('month', now() AT TIME ZONE 'America/Paramaribo') AT TIME ZONE 'America/Paramaribo') AS "registeredThisMonth",
          (SELECT count(*)::int FROM workflow_event WHERE event_type = 'FINALISED' AND occurred_at >= date_trunc('month', now() AT TIME ZONE 'America/Paramaribo') AT TIME ZONE 'America/Paramaribo') AS "finalisedThisMonth",
-         (SELECT count(*)::int FROM task WHERE status IN ${OPEN_TASK} AND archived_at IS NULL) AS "openTasks",
-         (SELECT count(*)::int FROM task WHERE status IN ${OPEN_TASK} AND archived_at IS NULL AND due_date < $1::date) AS "overdueTasks",
+         (SELECT count(*)::int FROM task WHERE status IN ${OPEN_TASK} AND archived_at IS NULL AND ${notConfidentialTicket('task')}) AS "openTasks",
+         (SELECT count(*)::int FROM task WHERE status IN ${OPEN_TASK} AND archived_at IS NULL AND due_date < $1::date AND ${notConfidentialTicket('task')}) AS "overdueTasks",
          (SELECT count(*)::int FROM correspondence_item WHERE state = 'DRAFT') AS "draftsWaiting",
          (SELECT count(*)::int FROM advice_request WHERE status = 'OPEN') AS "openAdvice"`,
       [today, weekEnd],
@@ -181,9 +195,9 @@ export class DashboardService {
                  FROM dossier d JOIN LATERAL (SELECT max(occurred_at) AS at FROM workflow_event WHERE dossier_id = d.id AND event_type = 'FINALISED') f ON f.at IS NOT NULL
                  WHERE d.owning_unit_id = u.id AND d.due_date IS NOT NULL AND f.at > now() - make_interval(days => $1)) AS "onTimePct",
               (SELECT count(*)::int FROM task t JOIN account a ON a.id = t.assignee_account_id
-                 WHERE a.organisational_unit_id = u.id AND t.status IN ${OPEN_TASK} AND t.archived_at IS NULL) AS "openTasks",
+                 WHERE a.organisational_unit_id = u.id AND t.status IN ${OPEN_TASK} AND t.archived_at IS NULL AND ${notConfidentialTicket('t')}) AS "openTasks",
               (SELECT count(*)::int FROM task t JOIN account a ON a.id = t.assignee_account_id
-                 WHERE a.organisational_unit_id = u.id AND t.status IN ${OPEN_TASK} AND t.archived_at IS NULL AND t.due_date < $2::date) AS "overdueTasks"
+                 WHERE a.organisational_unit_id = u.id AND t.status IN ${OPEN_TASK} AND t.archived_at IS NULL AND t.due_date < $2::date AND ${notConfidentialTicket('t')}) AS "overdueTasks"
          FROM organisational_unit u WHERE u.is_active
         ORDER BY u.name`,
       [days, today],
@@ -203,7 +217,7 @@ export class DashboardService {
               (SELECT count(*)::int FROM advice_request ar WHERE ar.requested_from_account_id = a.id AND ar.status = 'OPEN') AS "openAdvice"
          FROM account a JOIN person p ON p.id = a.person_id
          LEFT JOIN organisational_unit u ON u.id = a.organisational_unit_id
-         LEFT JOIN task t ON t.assignee_account_id = a.id AND t.archived_at IS NULL
+         LEFT JOIN task t ON t.assignee_account_id = a.id AND t.archived_at IS NULL AND ${notConfidentialTicket('t')}
         WHERE a.is_enabled AND EXISTS (SELECT 1 FROM role_assignment ra JOIN functional_role r ON r.id = ra.functional_role_id
                                         WHERE ra.account_id = a.id AND ra.revoked_at IS NULL AND r.code IN ('SUPPORT_STAFF','DIRECTEUR','ONDER_DIRECTEUR','MINISTER','RECORDS_MANAGER'))
         GROUP BY a.id, p.full_name, u.name
@@ -222,7 +236,7 @@ export class DashboardService {
               count(ci.id) FILTER (WHERE ci.direction = 'INTERNAL')::int AS internal,
               (SELECT count(*)::int FROM workflow_event we WHERE we.event_type = 'FINALISED'
                  AND date_trunc('month', we.occurred_at AT TIME ZONE 'America/Paramaribo') = m.month) AS finalised,
-              (SELECT count(*)::int FROM task t WHERE t.status = 'COMPLETED'
+              (SELECT count(*)::int FROM task t WHERE t.status = 'COMPLETED' AND ${notConfidentialTicket('t')}
                  AND date_trunc('month', t.completed_at AT TIME ZONE 'America/Paramaribo') = m.month) AS "tasksCompleted"
          FROM m LEFT JOIN correspondence_item ci
            ON date_trunc('month', ci.registered_at AT TIME ZONE 'America/Paramaribo') = m.month

@@ -7,6 +7,7 @@ import { emailHtml, NotificationService } from '../core/notification.service';
 import { WorkingDaysService } from '../core/working-days.service';
 import { OrgService } from '../org/org.service';
 import { SettingsService } from '../settings/settings.service';
+import { notConfidentialTicket } from '../projects/ticket-rules';
 
 interface Subject {
   type: 'TASK' | 'DOSSIER' | 'ADVICE';
@@ -18,6 +19,10 @@ interface Subject {
   owner: string | null;
   unitHead: string | null;
   link: string;
+  /** Project tickets: escalate to the project manager, then the owner — never up the line (need-to-know). */
+  projectChain?: string[];
+  /** What the audit log may say about the subject (a ticket's reference only). */
+  auditLabel?: string;
 }
 
 export interface DeadlineRunResult {
@@ -153,13 +158,13 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
         }
       }
       if (late >= Math.max(cfg.escalateAfterWorkingDays, 1)) {
-        const first = s.holder ? await this.org.supervisorOf(s.holder) : s.unitHead;
+        const first = s.projectChain ? (s.projectChain[0] ?? null) : s.holder ? await this.org.supervisorOf(s.holder) : s.unitHead;
         if (first && (await this.once(s, 'ESCALATION_1', first))) {
           await this.escalate(s, first, late, 1);
           result.escalations += 1;
         }
         if (first && late >= cfg.escalateAfterWorkingDays + cfg.secondEscalationAfterWorkingDays) {
-          const second = await this.org.supervisorOf(first);
+          const second = s.projectChain ? (s.projectChain[1] ?? null) : await this.org.supervisorOf(first);
           if (second && second !== first && (await this.once(s, 'ESCALATION_2', second))) {
             await this.escalate(s, second, late, 2);
             result.escalations += 1;
@@ -184,9 +189,9 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
       eventType: AuditEventType.DEADLINE_ESCALATED,
       actorAccountId: null,
       actorDescription: 'Scheduler',
-      subjectDescription: s.label.slice(0, 260),
+      subjectDescription: (s.auditLabel ?? s.label).slice(0, 260),
       newValue: `level ${level} → ${target?.full_name ?? to}`,
-      summary: `${s.label} is ${late} working day(s) overdue and was escalated (level ${level}) to ${target?.full_name ?? 'the supervisor'}.`.slice(0, 600),
+      summary: `${s.auditLabel ?? s.label} is ${late} working day(s) overdue and was escalated (level ${level}) to ${target?.full_name ?? 'the supervisor'}.`.slice(0, 600),
     });
   }
 
@@ -209,11 +214,16 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
 
   private async subjects(): Promise<Subject[]> {
     const tasks = await this.dataSource.query(
-      `SELECT t.id, t.reference || ' — ' || t.title AS label, to_char(t.due_date, 'YYYY-MM-DD') AS due,
-              t.assignee_account_id AS holder, ap.full_name AS holder_name, t.owner_account_id AS owner
+      `SELECT t.id, t.reference, t.reference || ' — ' || t.title AS label, to_char(t.due_date, 'YYYY-MM-DD') AS due,
+              t.assignee_account_id AS holder, ap.full_name AS holder_name, t.owner_account_id AS owner,
+              t.project_milestone_id IS NOT NULL AS ticket, pr.manager_account_id AS project_manager, pr.owner_account_id AS project_owner
          FROM task t JOIN account a ON a.id = t.assignee_account_id JOIN person ap ON ap.id = a.person_id
+         LEFT JOIN project_milestone pm ON pm.id = t.project_milestone_id
+         LEFT JOIN project pr ON pr.id = pm.project_id
         WHERE t.due_date IS NOT NULL AND t.archived_at IS NULL
-          AND t.status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW')`,
+          AND t.status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW')
+          -- a paused, completed or stopped project has no running deadlines
+          AND (t.project_milestone_id IS NULL OR pr.status IN ('PROPOSED','ACTIVE'))`,
     );
     const dossiers = await this.dataSource.query(
       `SELECT d.id, d.dossier_identity || ' — ' || d.subject AS label, to_char(d.due_date, 'YYYY-MM-DD') AS due,
@@ -233,7 +243,13 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
         WHERE ar.status = 'OPEN' AND ar.due_date IS NOT NULL`,
     );
     return [
-      ...tasks.map((t: Record<string, string>) => ({ type: 'TASK' as const, id: t.id, label: shorten(t.label), due: t.due, holder: t.holder, holderName: t.holder_name, owner: t.owner, unitHead: null, link: `/taken/${t.id}` })),
+      ...tasks.map((t: Record<string, string | boolean>) => {
+        const base = { type: 'TASK' as const, id: t.id as string, label: shorten(t.label as string), due: t.due as string, holder: t.holder as string, holderName: t.holder_name as string, owner: t.owner as string, unitHead: null, link: `/taken/${t.id}` };
+        if (!t.ticket) return base;
+        // A ticket escalates inside its project: the project manager, then the owner (whoever is not the holder).
+        const chain = [...new Set([t.project_manager as string, t.project_owner as string].filter((x) => x && x !== t.holder))];
+        return { ...base, projectChain: chain, auditLabel: t.reference as string };
+      }),
       ...dossiers.map((d: Record<string, string>) => ({ type: 'DOSSIER' as const, id: d.id, label: shorten(d.label), due: d.due, holder: d.holder, holderName: d.holder_name, owner: null, unitHead: d.unit_head, link: `/zaken/${d.id}` })),
       ...advice.map((a: Record<string, string>) => ({ type: 'ADVICE' as const, id: a.id, label: shorten(a.label), due: a.due, holder: a.holder, holderName: a.holder_name, owner: a.owner, unitHead: null, link: `/zaken/${a.dossier_id}` })),
     ];
@@ -277,9 +293,9 @@ export class DeadlinesService implements OnModuleInit, OnModuleDestroy {
         (SELECT count(*)::int FROM dossier WHERE state <> 'CLOSED' AND processing_state <> 'FINALISED') AS open_matters,
         (SELECT count(*)::int FROM dossier WHERE due_date < (now() AT TIME ZONE 'America/Paramaribo')::date
             AND state <> 'CLOSED' AND processing_state NOT IN ('APPROVED','FINALISED')) AS overdue_matters,
-        (SELECT count(*)::int FROM task WHERE status = 'COMPLETED' AND completed_at > now() - interval '7 days') AS tasks_done,
+        (SELECT count(*)::int FROM task WHERE status = 'COMPLETED' AND completed_at > now() - interval '7 days' AND ${notConfidentialTicket('task')}) AS tasks_done,
         (SELECT count(*)::int FROM task WHERE due_date < (now() AT TIME ZONE 'America/Paramaribo')::date
-            AND status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW') AND archived_at IS NULL) AS tasks_overdue,
+            AND status IN ('OPEN','ACCEPTED','IN_PROGRESS','WAITING','IN_REVIEW') AND archived_at IS NULL AND ${notConfidentialTicket('task')}) AS tasks_overdue,
         (SELECT count(*)::int FROM workflow_event WHERE event_type = 'FINALISED' AND occurred_at > now() - interval '7 days') AS finalised`);
     const summary =
       `Afgelopen week: ${stats.registered} stukken geregistreerd, ${stats.finalised} zaken afgerond, ${stats.tasks_done} taken voltooid. ` +
