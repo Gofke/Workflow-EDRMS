@@ -12,6 +12,9 @@
  * environment. It is never stored in the settings and never sent to a browser.
  */
 import { Settings } from '../settings/settings.defaults';
+import { agentConfig } from './agent/config';
+import { AgentError } from './agent/errors';
+import { GeminiModel } from './agent/providers';
 
 export interface Turn {
   role: 'system' | 'user' | 'assistant';
@@ -25,11 +28,25 @@ export interface Completion {
 
 export class LlmError extends Error {}
 
-const LOCAL = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|[a-z0-9-]+(:\d+)?(\/|$))/i;
-
-/** Inside the ministry network: localhost, a private address, or a bare host name. */
+/**
+ * Inside the ministry network: localhost, a private IPv4 address or a bare host
+ * name without dots (an intranet name). The host is parsed, so a public name
+ * such as 10.example.com or localhost.example.com is not mistaken for local.
+ */
 export function isLocalAddress(url: string): boolean {
-  return LOCAL.test(url);
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  if (host === 'localhost' || host === '::1') return true;
+  const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ip) {
+    const [a, b] = [Number(ip[1]), Number(ip[2])];
+    return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+  }
+  return /^[a-z0-9-]+$/.test(host);
 }
 
 function timeoutMs(): number {
@@ -62,6 +79,30 @@ export async function complete(cfg: Settings['ai'], turns: Turn[], options: { ma
   const key = process.env.AI_API_KEY ?? '';
   const maxTokens = options.maxTokens ?? 700;
   const temperature = options.temperature ?? 0.2;
+  if (cfg.provider === 'gemini') {
+    const effective = agentConfig(cfg);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), effective.callTimeoutMs);
+    try {
+      const r = await new GeminiModel(key, effective.baseUrl).generate({
+        model: effective.model,
+        system: turns.filter((t) => t.role === 'system').map((t) => t.content).join('\n\n'),
+        entries: turns.filter((t) => t.role !== 'system').map((t) => (t.role === 'user' ? { kind: 'user' as const, text: t.content } : { kind: 'model' as const, text: t.content, calls: [] })),
+        tools: [],
+        allowTools: false,
+        maxOutputTokens: maxTokens,
+        temperature,
+        signal: controller.signal,
+      });
+      if (!r.text) throw new LlmError('The language model returned no text.');
+      return { text: r.text, model: r.model };
+    } catch (error) {
+      if (error instanceof LlmError) throw error;
+      throw new LlmError(`The language model gave no answer (${(error as AgentError).reason ?? 'error'}).`);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   const base = cfg.baseUrl.replace(/\/+$/, '');
   if (cfg.provider === 'anthropic') {
     const system = turns.filter((t) => t.role === 'system').map((t) => t.content).join('\n\n');
@@ -89,6 +130,26 @@ export async function complete(cfg: Settings['ai'], turns: Turn[], options: { ma
 /** Whether the configured model answers, and which models it offers. */
 export async function probe(cfg: Settings['ai']): Promise<{ reachable: boolean; models: string[]; error?: string }> {
   if (cfg.provider === 'builtin') return { reachable: true, models: ['builtin'] };
+  if (cfg.provider === 'gemini') {
+    const effective = agentConfig(cfg);
+    const key = process.env.AI_API_KEY ?? '';
+    if (!key) return { reachable: false, models: [], error: 'AI_API_KEY is not set on the server.' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(`${effective.baseUrl.replace(/\/+$/, '')}/models?pageSize=100`, { headers: { 'x-goog-api-key': key }, signal: controller.signal });
+      if (!res.ok) return { reachable: false, models: [], error: `HTTP ${res.status}` };
+      const body = (await res.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
+      return {
+        reachable: true,
+        models: (body.models ?? []).filter((m) => (m.supportedGenerationMethods ?? ['generateContent']).includes('generateContent')).map((m) => m.name.replace(/^models\//, '')).slice(0, 50),
+      };
+    } catch (error) {
+      return { reachable: false, models: [], error: (error as Error).message };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);

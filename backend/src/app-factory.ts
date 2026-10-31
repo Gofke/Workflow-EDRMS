@@ -5,6 +5,7 @@ import session from 'express-session';
 import helmet from 'helmet';
 import express from 'express';
 import { AppModule } from './app.module';
+import { assistantGate } from './ai/agent/assistant.controller';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PgSession = require('connect-pg-simple')(session);
@@ -61,6 +62,8 @@ export async function createApp(): Promise<INestApplication> {
   });
   // The mail gateway delivers a raw RFC 822 message, not JSON.
   app.use('/api/intake/email/gateway', express.raw({ type: () => true, limit: process.env.INTAKE_MAX_BYTES ?? '30mb' }));
+  // The assistant: origin check, per-address limit and body size, before the session.
+  app.use('/api/v1/ai', assistantGate());
   app.enableCors({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
     credentials: true,

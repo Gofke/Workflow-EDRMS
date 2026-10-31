@@ -165,6 +165,44 @@ export class ChatService {
     };
   }
 
+  /**
+   * The built-in, offline answer to one message — used by the assistant when
+   * no language model is configured or the model cannot answer. Same intents,
+   * same permission checks, nothing leaves the server.
+   */
+  async offlineReply(actor: Actor, message: string, language: 'nl' | 'en', context: ChatContext | null): Promise<Reply> {
+    try {
+      return await this.answer(actor, message, language, context);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      const en = language === 'en';
+      if (status === 403) return { intent: 'switched-off', content: en ? 'That assistant function is switched off by the administrator.' : 'Die functie van de assistent is door de beheerder uitgezet.', cards: [], suggestions: en ? SUGGEST_EN : SUGGEST_NL };
+      if (status === 404) return { intent: 'not-found', content: en ? 'I could not find that, or you do not have access to it.' : 'Dat kon ik niet vinden, of u hebt er geen toegang toe.', cards: [], suggestions: [] };
+      if (status === 400) return { intent: 'refused', content: (error as Error).message, cards: [], suggestions: [] };
+      throw error;
+    }
+  }
+
+  /**
+   * Requests that propose changes (a task, tasks from meeting notes) stay with
+   * the built-in engine even when a language model is configured: the person's
+   * text never leaves the server and nothing happens without their confirmation.
+   */
+  static proposesChanges(message: string): boolean {
+    const t = normalise(message);
+    if (/^(maak|creeer|plan|zet|voeg)\b.*\b(taak|actie|herinnering)\b|^herinner (me|mij)\b|^(create|add|make|set up)\b.*\b(task|reminder|action)\b|^remind me\b/.test(t)) return true;
+    return message.split('\n').length >= 3 && /(notulen|actiepunten|verslag|meeting notes|minutes|action items)/.test(t);
+  }
+
+  /** Checks a conversation id belongs to the person; a new one otherwise. */
+  async conversationFor(accountId: string, conversationId?: string | null): Promise<string> {
+    if (!conversationId) return randomUUID();
+    if (!isUuid(conversationId)) throw new NotFoundException('Unknown conversation.');
+    const [other] = await this.dataSource.query(`SELECT 1 FROM chat_message WHERE conversation_id = $1 AND account_id <> $2 LIMIT 1`, [conversationId, accountId]);
+    if (other) throw new NotFoundException('Unknown conversation.');
+    return conversationId;
+  }
+
   async conversations(accountId: string) {
     return this.dataSource.query(
       `SELECT conversation_id AS id, min(created_at) AS "startedAt", max(created_at) AS "lastAt", count(*)::int AS messages,

@@ -8,6 +8,7 @@ import { MANAGEMENT_ROLES, todayInSuriname } from '../common/actor';
 import { addDays, WorkingDaysService } from '../core/working-days.service';
 import { LettersService } from '../letters/letters.service';
 import { Actor } from '../records/registration.service';
+import { agentConfig } from './agent/config';
 import { Settings } from '../settings/settings.defaults';
 import { SettingsService } from '../settings/settings.service';
 import { TasksService } from '../tasks/tasks.service';
@@ -154,11 +155,19 @@ export class AiService {
    */
   async model(cfg: Settings['ai'], levels: string[], turns: Turn[], maxTokens = 700): Promise<{ text: string | null; engine: Engine }> {
     if (cfg.provider === 'builtin') return { text: null, engine: BUILTIN };
-    const local = isLocalAddress(cfg.baseUrl);
+    const local = cfg.provider !== 'gemini' && isLocalAddress(cfg.baseUrl);
     if (!local && levels.some((l) => l === 'CONFIDENTIAL' || l === 'SECRET')) {
       return {
         text: null,
         engine: { ...BUILTIN, fallback: 'Vertrouwelijke stukken gaan niet naar een taalmodel buiten het netwerk van het ministerie; de ingebouwde assistent is gebruikt.' },
+      };
+    }
+    // Record text goes to a model outside the ministry network only when the
+    // data policy allows it; a free external model never gets it.
+    if (!local && agentConfig(cfg).dataPolicy === 'metadata') {
+      return {
+        text: null,
+        engine: { ...BUILTIN, fallback: 'Volgens het gegevensbeleid gaat documenttekst niet naar een taalmodel buiten het netwerk van het ministerie; de ingebouwde assistent is gebruikt.' },
       };
     }
     try {
@@ -1174,7 +1183,7 @@ export class AiService {
           aiInteractionId: interactionId,
         });
       }
-      if (['meetingNotes', 'chat'].includes(interaction.feature) && input.apply.tasks?.length) {
+      if (['meetingNotes', 'chat', 'assistant'].includes(interaction.feature) && input.apply.tasks?.length) {
         if (input.apply.tasks.length > 40) throw new BadRequestException('Too many tasks at once.');
         const created = [];
         for (const t of input.apply.tasks) {

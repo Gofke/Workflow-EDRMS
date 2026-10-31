@@ -16,6 +16,9 @@ import {
 import { Request } from 'express';
 import { AuthModule } from '../auth/auth.module';
 import { RequireRoles } from '../auth/require-roles.decorator';
+import { AssistantController } from './agent/assistant.controller';
+import { agentConfig } from './agent/config';
+import { AssistantService } from './agent/assistant.service';
 import { actorFrom, BUSINESS_ROLES, MANAGEMENT_ROLES } from '../common/actor';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { LettersModule } from '../letters/letters.module';
@@ -108,7 +111,11 @@ export class AiController {
   @Get('model-check')
   @RequireRoles('SYS_ADMIN')
   async modelCheck() {
-    return probe(await this.ai.config());
+    // What the assistant really uses: the server environment wins over the settings.
+    const cfg = await this.ai.config();
+    const eff = agentConfig(cfg);
+    if (eff.provider === 'builtin') return probe({ ...cfg, provider: 'builtin' });
+    return probe({ ...cfg, provider: eff.provider, model: eff.model, baseUrl: eff.baseUrl });
   }
 
   /** The help articles the chatbot answers from, for the Help page. Not a switchable AI feature. */
@@ -211,13 +218,13 @@ export class AiController {
   }
 
   @Get('chat/conversations')
-  @RequireRoles(...BUSINESS_ROLES)
+  @RequireRoles(...BUSINESS_ROLES, 'AUDITOR', 'SYS_ADMIN')
   conversations(@Req() request: Request) {
     return this.chat.conversations(request.authenticatedUser!.accountId);
   }
 
   @Get('chat/conversations/:id')
-  @RequireRoles(...BUSINESS_ROLES)
+  @RequireRoles(...BUSINESS_ROLES, 'AUDITOR', 'SYS_ADMIN')
   messages(@Param('id') id: string, @Req() request: Request) {
     return this.chat.messages(request.authenticatedUser!.accountId, id);
   }
@@ -244,8 +251,8 @@ export class AiController {
 
 @Module({
   imports: [AuthModule, TasksModule, LettersModule, DashboardModule],
-  controllers: [AiController],
-  providers: [AiService, ChatService],
+  controllers: [AiController, AssistantController],
+  providers: [AiService, ChatService, AssistantService],
   exports: [AiService],
 })
 export class AiModule {}

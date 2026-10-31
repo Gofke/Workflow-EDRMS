@@ -60,12 +60,29 @@ export interface Settings {
   };
   ai: {
     /** builtin: runs inside this server, free, no data leaves it. */
-    provider: 'builtin' | 'ollama' | 'openai-compatible' | 'anthropic';
+    provider: 'builtin' | 'gemini' | 'ollama' | 'openai-compatible' | 'anthropic';
     baseUrl: string;
     model: string;
+    /** Tried in order when the model is busy or its free limit is reached (same provider and key). */
+    fallbackModels: string[];
     /** Must be true before a provider outside this server may be used. */
     externalProviderAcknowledged: boolean;
+    /**
+     * What the assistant may send to an external model. metadata: numbers,
+     * statuses, dates, unit and staff names — never subjects or document text.
+     * records: also subjects of open and internal records (paid tier or own
+     * hardware only). Confidential and secret content never leaves the server.
+     */
+    dataPolicy: 'metadata' | 'records';
+    /** work: ministry work only. broad: also general office questions. */
+    scope: 'work' | 'broad';
+    /** Questions per person per hour. */
+    hourlyLimit: number;
+    /** Let the built-in assistant answer when the model cannot. */
+    offlineFallback: boolean;
     features: {
+      /** The GPT-style assistant panel backed by a language model. */
+      assistant: boolean;
       chat: boolean;
       intake: boolean;
       summary: boolean;
@@ -150,8 +167,14 @@ export const SETTING_DEFAULTS: Settings = {
     provider: 'builtin',
     baseUrl: 'http://localhost:11434/v1',
     model: 'llama3.1:8b',
+    fallbackModels: [],
     externalProviderAcknowledged: false,
+    dataPolicy: 'metadata',
+    scope: 'broad',
+    hourlyLimit: 30,
+    offlineFallback: true,
     features: {
+      assistant: false,
       chat: false,
       intake: false,
       summary: false,

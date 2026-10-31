@@ -16,7 +16,7 @@ const KNOWN_ROLES = [
   'RECORDS_MANAGER',
 ];
 const LEVELS = ['OPEN', 'INTERNAL', 'CONFIDENTIAL', 'SECRET'];
-const PROVIDERS = ['builtin', 'ollama', 'openai-compatible', 'anthropic'];
+const PROVIDERS = ['builtin', 'gemini', 'ollama', 'openai-compatible', 'anthropic'];
 
 /**
  * Screen-editable configuration.
@@ -196,8 +196,15 @@ function validate(key: SettingKey, v: Settings[SettingKey]): void {
     case 'ai': {
       const a = v as Settings['ai'];
       if (!PROVIDERS.includes(a.provider)) fail('Unknown AI provider.');
-      if (a.provider !== 'builtin' && !/^https?:\/\/[^\s]+$/.test(a.baseUrl)) fail('The AI address must be a URL.');
-      const external = a.provider !== 'builtin' && !isLocalAddress(a.baseUrl);
+      if (!['builtin', 'gemini'].includes(a.provider) && !/^https?:\/\/[^\s]+$/.test(a.baseUrl)) fail('The AI address must be a URL.');
+      if (!['metadata', 'records'].includes(a.dataPolicy)) fail('Unknown data policy.');
+      if (!['work', 'broad'].includes(a.scope)) fail('Unknown assistant scope.');
+      if (!isInt(a.hourlyLimit, 1, 1000)) fail('Questions per hour must be between 1 and 1000.');
+      if (!Array.isArray(a.fallbackModels) || a.fallbackModels.length > 3 || a.fallbackModels.some((m) => typeof m !== 'string' || !/^[\w.:/-]{1,80}$/.test(m))) {
+        fail('Fallback models must be up to three model names.');
+      }
+      if (!/^[\w.:/-]{1,80}$/.test(a.model)) fail('The model name is not valid.');
+      const external = a.provider === 'gemini' || (a.provider !== 'builtin' && !isLocalAddress(a.baseUrl));
       if (external && !a.externalProviderAcknowledged) {
         fail('This AI address is outside the ministry network. Confirm that data may leave the server before choosing it.');
       }
