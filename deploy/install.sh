@@ -145,12 +145,16 @@ if [[ "$ACTION" == "demo" ]]; then
   pw="${JUSPOL_DEMO_PASSWORD-}"
   if [[ -z "$pw" ]]; then
     [[ -t 0 ]] || die "run this in a terminal: it asks for the password of the demonstration accounts."
-    read -r -s -p "Password (at least 10 characters, not shown): " pw; echo
+    read -r -s -p "Password (at least 12 characters, three of: a-z, A-Z, 0-9, symbol; not shown): " pw; echo
     read -r -s -p "Same password again: " pw2; echo
     [[ "$pw" == "$pw2" ]] || die "the two passwords differ. Nothing was changed."
     unset pw2
   fi
-  [[ ${#pw} -ge 10 ]] || die "the password needs at least 10 characters. Nothing was changed."
+  # The application's own password rule (Beheer → Beveiliging): 12 characters, three kinds of character.
+  [[ ${#pw} -ge 12 ]] || die "the password needs at least 12 characters. Nothing was changed."
+  kinds=0
+  for re in '[a-z]' '[A-Z]' '[0-9]' '[^A-Za-z0-9]'; do [[ "$pw" =~ $re ]] && kinds=$((kinds + 1)); done
+  (( kinds >= 3 )) || die "the password needs three of: lower case, upper case, digits, symbols. Nothing was changed."
   echo "ok (used only now, not stored)"
 
   step "Helper for loading the data"

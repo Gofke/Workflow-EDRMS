@@ -164,8 +164,11 @@ check "a release that contains a key is refused" '[[ $rc -ne 0 ]] && grep -q "lo
 rc=$(JUSPOL_DEMO_PASSWORD="Demo-Pass-123" run demo --env production)
 check "demonstration data is refused on production" '[[ $rc -ne 0 ]] && grep -q "never loaded on production" "$T/out"'
 
-rc=$(JUSPOL_DEMO_PASSWORD="short" run demo --env staging)
-check "a short demonstration password is refused" '[[ $rc -ne 0 ]] && grep -q "at least 10 characters" "$T/out" && [[ ! -f "$T/state/demo" ]]'
+rc=$(JUSPOL_DEMO_PASSWORD="Short-Pass1" run demo --env staging)
+check "a demonstration password under 12 characters is refused (the application's rule)" '[[ $rc -ne 0 ]] && grep -q "at least 12 characters" "$T/out" && [[ ! -f "$T/state/demo" ]]'
+
+rc=$(JUSPOL_DEMO_PASSWORD="onlylowercaseletters" run demo --env staging)
+check "a demonstration password with one kind of character is refused" '[[ $rc -ne 0 ]] && grep -q "three of: lower case" "$T/out" && [[ ! -f "$T/state/demo" ]]'
 
 rc=$(JUSPOL_DEMO_PASSWORD="Demo-Pass-123" run demo --env staging --reset)
 check "demonstration data: loaded as the service user with the settings, the password only in the environment" '[[ $rc -eq 0 ]] && grep -q "=== DONE: sign in at https://edrms-test.juspol.sr" "$T/out" && grep -q "runuser -u juspol-staging -- $JUSPOL_NODE dist/seed/demo.js --reset" "$T/state/calls" && grep -q "SEED=Demo-Pass-123 NODE_PATH=$JUSPOL_PREFIX/opt/juspol/staging/demo-tools/node_modules DOCS=$JUSPOL_PREFIX/opt/juspol/staging/storage/documents" "$T/state/demo" && ! grep -q "Demo-Pass-123" "$T/state/calls" "$S"'

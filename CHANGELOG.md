@@ -3,7 +3,8 @@
 ## Unreleased
 
 - `deploy/install.sh` accepts Google's new API key format (`AQ.…`), which AI Studio issues since 2026; the assistant already sends the key in the `x-goog-api-key` header that these keys need
-- Installer test: 27 checks
+- `install.sh demo` checks the application's password rule (12 characters, three kinds of character) before loading; it allowed 10, so loading stopped at the first account
+- Installer test: 28 checks
 
 ## V0.4.1 — Installer ready for a real server
 
