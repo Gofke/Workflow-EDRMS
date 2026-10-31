@@ -146,7 +146,7 @@ export function Layout({ children }: { children: ReactNode }) {
               ))}
           </nav>
           <div className="rail-foot">
-            {t('Versie', 'Version')} 0.3.0
+            {t('Versie', 'Version')} 0.4.0
             <br />
             {branding?.tagline}
           </div>
@@ -165,7 +165,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </button>
             {business && <GlobalSearch />}
             <div className="spacer" />
-            {business && session.ai('chat') && (
+            {(session.ai('assistant') || (business && session.ai('chat'))) && (
               <button type="button" className="ask-btn" onClick={() => assistant.setOpen(!assistant.open)} aria-expanded={assistant.open} aria-label={t('Vraag de assistent', 'Ask the assistant')} data-tour="chat">
                 <Sparkles size={18} aria-hidden="true" />
                 <span className="label">{t('Vraag de assistent', 'Ask the assistant')}</span>

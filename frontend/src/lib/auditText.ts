@@ -31,6 +31,21 @@ const date = (iso: string) => iso.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3-$2-$1
 const plural = (n: string, one: string, many: string) => `${n} ${n === '1' ? one : many}`;
 
 type Rule = [RegExp, (...m: string[]) => string];
+const AI_REASON: Record<string, string> = {
+  'no language model': 'geen taalmodel ingesteld',
+  'rate-limit': 'limiet per uur bereikt',
+  'free-limit': 'gratis limiet van het model bereikt',
+  unavailable: 'model niet bereikbaar',
+  timeout: 'model antwoordde niet op tijd',
+  'no-key': 'geen sleutel ingesteld',
+  'bad-key': 'sleutel geweigerd',
+  'bad-model': 'model niet beschikbaar',
+  'bad-request': 'model kon de vraag niet verwerken',
+  'too-many-steps': 'te veel stappen',
+  cancelled: 'gestopt door de gebruiker',
+  'switched-off': 'assistent uitgezet',
+  'change proposal': 'voorstel tot wijziging, binnen de server afgehandeld',
+};
 const REFUSED: Record<string, string> = {
   'incorrect password': 'verkeerd wachtwoord',
   'no such account': 'onbekend account',
@@ -74,6 +89,11 @@ const RULES: Rule[] = [
   [/^(.+?) created the task template "(.+)"\.$/, (who, n) => `${who} maakte het taaksjabloon "${n}" aan.`],
   [/^(.+?) printed the label for (\S+)\.$/, (who, id) => `${who} drukte het etiket af voor ${id}.`],
   [/^(.+?) printed the receipt for (\S+)\.$/, (who, id) => `${who} drukte het ontvangstbewijs af voor ${id}.`],
+  [/^(.+?) asked the assistant a question; answered by (.+?) using (.+)\.$/, (who, model, tools) =>
+    `${who} stelde de assistent een vraag; beantwoord door ${model} ${tools === 'no tools' ? 'zonder hulpmiddelen' : `met ${tools}`}.`],
+  [/^(.+?) asked the assistant a question; answered offline by the built-in assistant \((.+)\)\.$/, (who, why) =>
+    `${who} stelde de assistent een vraag; offline beantwoord door de ingebouwde assistent (${AI_REASON[why] ?? why}).`],
+  [/^(.+?) asked the assistant a question; not answered \((.+)\)\.$/, (who, why) => `${who} stelde de assistent een vraag; niet beantwoord (${AI_REASON[why] ?? why}).`],
   [/^(.+?) accepted an assistant suggestion \((.+)\)\.$/, (who) => `${who} nam een voorstel van de assistent over.`],
   [/^(.+?) rejected an assistant suggestion \((.+)\)\.$/, (who) => `${who} wees een voorstel van de assistent af.`],
   [/^(.+?) edited an assistant suggestion \((.+)\)\.$/, (who) => `${who} nam een voorstel van de assistent aangepast over.`],

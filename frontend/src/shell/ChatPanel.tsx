@@ -1,8 +1,9 @@
-import { ExternalLink, MessageSquarePlus, Send, Sparkles, X } from 'lucide-react';
+import { ExternalLink, History, MessageSquarePlus, Send, ShieldCheck, Sparkles, Square, WifiOff, X } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, errorText } from '../lib/api';
+import { Link, useLocation } from 'react-router-dom';
+import { ApiError, api, errorText } from '../lib/api';
 import { date } from '../lib/format';
+import { Markdown } from '../lib/markdown';
 import { usePrefs } from '../lib/prefs';
 import { Badge, Stamp } from '../ui';
 import { PersonSelect } from '../ui/people';
@@ -37,6 +38,12 @@ interface Card {
   sourceInteractionId?: string;
 }
 
+interface Engine {
+  provider: string;
+  model: string;
+  offline: boolean;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -46,29 +53,112 @@ interface Message {
   pending?: { kind: string; interactionId: string } | null;
   intent?: string;
   interactionId?: string;
+  toolsUsed?: string[];
+  engine?: Engine;
+  notice?: string | null;
+  failed?: boolean;
+}
+
+interface Status {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  offline: boolean;
+  external: boolean;
+  tier: 'free' | 'paid';
+  dataPolicy: 'metadata' | 'records';
+  hourlyLimit: number;
+  usedThisHour: number;
+  limits: { question: number; historyTurns: number };
+  examples: string[];
+}
+
+interface Answer {
+  answer: string;
+  toolsUsed: string[];
+  cards: Card[];
+  suggestions: string[];
+  conversationId: string;
+  messageId: string;
+  engine: Engine;
+  notice: string | null;
+  pending: { kind: string; interactionId: string } | null;
+}
+
+const TOOL_LABEL: Record<string, [string, string]> = {
+  help_articles: ['help', 'help'],
+  my_work: ['mijn werk', 'my work'],
+  find_record: ['opzoeken', 'look-up'],
+  list_records: ['lijst', 'list'],
+  count_records: ['telling', 'count'],
+  deadline_risk: ['termijnrisico', 'deadline risk'],
+  org_structure: ['organisatie', 'organisation'],
+  summarise_record: ['samenvatting', 'summary'],
+  draft_reply: ['conceptantwoord', 'draft reply'],
+  retention_overview: ['bewaartermijnen', 'retention'],
+  audit_overview: ['audit', 'audit'],
+  system_status: ['systeemstatus', 'system status'],
+};
+
+const PROVIDER: Record<string, string> = { gemini: 'Gemini', anthropic: 'Claude', 'openai-compatible': 'Model', ollama: 'Ollama' };
+
+/** The page the person has open, without a record id when they chose to leave it out. */
+function pageOf(pathname: string, withRecord: boolean): string {
+  return withRecord ? pathname : pathname.replace(/\/[0-9a-f-]{36}.*$/i, '');
 }
 
 /**
- * The assistant, on every page. It answers from what the system holds and
- * what the person may see; whatever it proposes waits for their confirmation.
+ * The assistant, on every page: a chat like ChatGPT, docked on the right. It
+ * answers from what the system holds and only within what the person may see —
+ * that is enforced on the server, not here. Answers render as safe Markdown.
  */
 export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { t, language } = usePrefs();
+  const location = useLocation();
   const { context, setContext, prompt, clearPrompt, resume, clearResume } = useAssistant();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
   const [useContextFor, setUseContextFor] = useState(true);
   const log = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const stopper = useRef<AbortController | null>(null);
+  /** Increases with every new chat, so a late answer never lands in the next conversation. */
+  const generation = useRef(0);
+
+  const loadStatus = () =>
+    api
+      .get<{ data: Status }>(`/api/v1/ai/status?lang=${language}`)
+      .then((r) => setStatus(r.data))
+      .catch(() => setStatus(null));
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    void loadStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
   useEffect(() => {
-    log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' });
+    inputRef.current?.focus();
+    // Closing the panel stops a question in progress; changing the language does not.
+    return () => stopper.current?.abort();
+  }, []);
+  // Like a chat app: while waiting, show the newest; when an answer arrives,
+  // show it from its start, with the question above it.
+  useEffect(() => {
+    const el = log.current;
+    if (!el) return;
+    const last = messages[messages.length - 1];
+    if (!busy && last?.role === 'assistant') {
+      const questions = el.querySelectorAll<HTMLElement>('.msg.user');
+      const q = questions[questions.length - 1];
+      if (q) {
+        el.scrollTo({ top: Math.max(q.offsetTop - 8, 0), behavior: 'smooth' });
+        return;
+      }
+    }
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
   useEffect(() => {
     if (prompt) {
@@ -91,27 +181,74 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       .catch((e) => setError(errorText(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume]);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
+
+  /** What the model may see of the conversation: the person's turns and the model's own answers. */
+  function historyFor(list: Message[]) {
+    return list
+      .filter((m) => !m.failed && (m.role === 'user' || (m.engine && !m.engine.offline)))
+      .slice(-30)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+  }
 
   async function send(text: string) {
-    const message = text.trim();
-    if (!message || busy) return;
+    const question = text.trim();
+    if (!question || busy) return;
+    const limit = status?.limits.question ?? 2000;
+    if (question.length > limit) {
+      setError(t(`De vraag is te lang (${question.length} tekens). Houd het onder de ${limit}.`, `The question is too long (${question.length} characters). Keep it under ${limit}.`));
+      return;
+    }
     setInput('');
     setError(null);
-    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', content: message }]);
+    const before = messages;
+    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', content: question }]);
     setBusy(true);
+    const stop = new AbortController();
+    stopper.current = stop;
+    const gen = generation.current;
     try {
-      const r = await api.post<{ conversationId: string; message: Message }>('/api/ai/chat', {
-        ...(conversationId ? { conversationId } : {}),
-        message,
-        language,
-        context: context && useContextFor ? { type: context.type, id: context.id } : null,
+      const response = await fetch('/api/v1/ai/query', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': language },
+        body: JSON.stringify({
+          question,
+          history: historyFor(before),
+          lang: language,
+          page: pageOf(location.pathname, Boolean(context) && useContextFor),
+          ...(conversationId ? { conversationId } : {}),
+        }),
+        signal: stop.signal,
       });
-      setConversationId(r.conversationId);
-      setMessages((m) => [...m, r.message]);
+      const body = (await response.json().catch(() => null)) as { success?: boolean; message?: string; reason?: string; data?: Answer } | null;
+      if (response.status === 401) window.dispatchEvent(new CustomEvent('juspol:signed-out'));
+      if (!response.ok || !body?.success || !body.data) throw new ApiError(response.status, body?.message ?? t('Er ging iets mis. Probeer het opnieuw.', 'Something went wrong. Try again.'), body);
+      const a = body.data;
+      if (gen !== generation.current) return;
+      setConversationId(a.conversationId);
+      setMessages((m) => [
+        ...m,
+        { id: a.messageId, role: 'assistant', content: a.answer, cards: a.cards, suggestions: a.suggestions, toolsUsed: a.toolsUsed, engine: a.engine, notice: a.notice, pending: a.pending, intent: 'assistant' },
+      ]);
     } catch (e) {
-      setError(errorText(e));
+      if (gen !== generation.current) return;
+      if ((e as Error).name === 'AbortError') {
+        // The stopped question is not sent again as history.
+        setMessages((m) => [...m.map((x, i) => (i === m.length - 1 && x.role === 'user' ? { ...x, failed: true } : x)), { id: `s-${Date.now()}`, role: 'assistant', content: t('Gestopt.', 'Stopped.'), failed: true }]);
+      } else {
+        setMessages((m) => m.map((x, i) => (i === m.length - 1 ? { ...x, failed: true } : x)));
+        setError(errorText(e));
+      }
     } finally {
+      stopper.current = null;
       setBusy(false);
+      void loadStatus();
     }
   }
 
@@ -120,35 +257,86 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
     void send(input);
   };
 
-  const starters = language === 'en'
-    ? ['What is waiting for me today?', 'Which matters are at risk of missing their deadline?', 'How many letters came in this week?', 'How do I submit a matter for approval?']
-    : ['Wat staat er vandaag voor mij klaar?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Hoeveel brieven kwamen deze week binnen?', 'Hoe bied ik een zaak ter goedkeuring aan?'];
+  const newChat = () => {
+    generation.current += 1;
+    stopper.current?.abort();
+    setBusy(false);
+    setMessages([]);
+    setConversationId(null);
+    setError(null);
+    inputRef.current?.focus();
+  };
+
+  const examples = status?.examples?.length
+    ? status.examples
+    : language === 'en'
+      ? ['What is waiting for me today?', 'Which matters are at risk of missing their deadline?', 'How many letters came in this week?', 'How do I register a letter?']
+      : ['Wat staat er vandaag voor mij klaar?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Hoeveel brieven kwamen deze week binnen?', 'Hoe registreer ik een brief?'];
+  const offline = !status || status.offline;
+  const left = status ? Math.max(status.hourlyLimit - status.usedThisHour, 0) : null;
 
   return (
-    <section className="chat" role="dialog" aria-label={t('Assistent', 'Assistant')}>
+    <aside className="chat chat-docked" role="dialog" aria-label={t('Assistent', 'Assistant')}>
       <div className="chat-head">
-        <Sparkles size={20} style={{ color: 'var(--assist)' }} aria-hidden="true" />
+        <span className="chat-avatar" aria-hidden="true">
+          <Sparkles size={20} />
+        </span>
         <div className="grow">
-          <div className="title">{t('Assistent', 'Assistant')}</div>
-          <div className="xs muted">{t('Gratis en op de eigen server. Ziet alleen wat u mag zien.', 'Free and on the ministry’s own server. Sees only what you may see.')}</div>
+          <div className="title">{t('Vraag de assistent', 'Ask the assistant')}</div>
+          <div className="xs muted">{t('Ziet alleen wat u mag zien, binnen uw lijn.', 'Sees only what you may see, within your line.')}</div>
         </div>
-        <button type="button" className="icon-btn" title={t('Nieuw gesprek', 'New conversation')} aria-label={t('Nieuw gesprek', 'New conversation')} onClick={() => (setMessages([]), setConversationId(null))}>
+        <Link to="/assistent?tab=geschiedenis" className="icon-btn" title={t('Eerdere gesprekken', 'Earlier conversations')} aria-label={t('Eerdere gesprekken', 'Earlier conversations')}>
+          <History size={19} />
+        </Link>
+        <button type="button" className="icon-btn" title={t('Nieuw gesprek', 'New chat')} aria-label={t('Nieuw gesprek', 'New chat')} onClick={newChat}>
           <MessageSquarePlus size={19} />
         </button>
         <button type="button" className="icon-btn" onClick={onClose} aria-label={t('Assistent sluiten', 'Close assistant')}>
           <X size={20} />
         </button>
       </div>
-      <div className="chat-log" ref={log} aria-live="polite">
+      <div className="chat-model" aria-live="polite">
+        {status && !status.enabled ? (
+          <span className="model-badge off">{t('Uitgezet door de beheerder', 'Switched off by the administrator')}</span>
+        ) : offline ? (
+          <span className="model-badge offline" title={t('Antwoordt op de eigen server, zonder taalmodel.', 'Answers on the ministry server, without a language model.')}>
+            <WifiOff size={14} aria-hidden="true" /> {t('Ingebouwde assistent, offline', 'Built-in assistant, offline')}
+          </span>
+        ) : (
+          <span className="model-badge online" title={status?.model}>
+            <span className="dot" aria-hidden="true" /> {PROVIDER[status!.provider] ?? status!.provider} <span className="model-name">{status!.model}</span>
+          </span>
+        )}
+        {left !== null && status?.enabled && !offline && (
+          <span className={`xs ${left <= 3 ? 'warn-text' : 'muted'}`}>
+            {t(`nog ${left} van ${status.hourlyLimit} vragen dit uur`, `${left} of ${status.hourlyLimit} questions left this hour`)}
+          </span>
+        )}
+      </div>
+      <div className="chat-log" ref={log}>
         {messages.length === 0 && (
-          <div className="msg assistant">
-            {t(
-              'Goedendag. Ik kan vertellen wat er voor u klaarstaat, brieven en zaken zoeken, een zaak samenvatten, een conceptantwoord maken, termijnrisico’s tonen, een taak voor u klaarzetten en uitleggen hoe het systeem werkt.',
-              'Good day. I can tell you what is waiting for you, find letters and matters, summarise a matter, draft a reply, show deadline risks, prepare a task for you and explain how the system works.',
+          <div className="chat-welcome">
+            <p className="strong">{t('Goedendag. Waarmee kan ik u helpen?', 'Good day. How can I help?')}</p>
+            <p className="small muted">
+              {t(
+                'Vraag naar uw werk, zaken, brieven en taken, termijnen en aantallen, wie wat behandelt, of hoe iets werkt in het systeem.',
+                'Ask about your work, matters, letters and tasks, deadlines and counts, who handles what, or how something works in the system.',
+              )}
+            </p>
+            {status?.external && status.dataPolicy === 'metadata' && (
+              <div className="privacy-note small">
+                <ShieldCheck size={16} aria-hidden="true" />
+                <span>
+                  {t(
+                    'Gratis Gemini: naar Google gaan alleen kenmerken zoals nummers, status, data en namen van eenheden en behandelaars. Onderwerpen, documenten en vertrouwelijke stukken blijven op de server. Typ geen persoonsgegevens.',
+                    'Free Gemini: only attributes such as numbers, statuses, dates and names of units and handlers go to Google. Subjects, documents and confidential records stay on the server. Do not type personal details.',
+                  )}
+                </span>
+              </div>
             )}
-            <div className="chips" style={{ marginTop: 10 }}>
-              {starters.map((s) => (
-                <button key={s} type="button" className="chip-btn" onClick={() => void send(s)}>
+            <div className="chips examples">
+              {examples.map((s) => (
+                <button key={s} type="button" className="chip-btn" onClick={() => void send(s)} disabled={busy || (status ? !status.enabled : false)}>
                   {s}
                 </button>
               ))}
@@ -156,18 +344,23 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {messages.map((m, i) => (
-          <MessageView key={m.id} m={m} last={i === messages.length - 1} onSuggest={(s) => void send(s)} />
+          <MessageView key={m.id} m={m} last={i === messages.length - 1 && !busy} onSuggest={(s) => void send(s)} />
         ))}
         {busy && (
-          <div className="msg assistant" aria-label={t('De assistent denkt na', 'The assistant is thinking')}>
-            <span className="typing">
+          <div className="msg assistant thinking" aria-label={t('De assistent denkt na', 'The assistant is thinking')}>
+            <span className="typing" aria-hidden="true">
               <span />
               <span />
               <span />
             </span>
+            <span className="xs muted">{t('Zoekt het uit…', 'Looking it up…')}</span>
           </div>
         )}
-        {error && <div className="notice danger small">{error}</div>}
+        {error && (
+          <div className="notice danger small" role="alert">
+            {error}
+          </div>
+        )}
       </div>
       <div className="chat-foot">
         {context && (
@@ -181,11 +374,12 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             </button>
           </label>
         )}
-        <form onSubmit={submit}>
+        <form onSubmit={submit} className="chat-input">
           <textarea
             ref={inputRef}
             className="textarea"
-            style={{ minHeight: 44, height: 44 }}
+            rows={1}
+            maxLength={(status?.limits.question ?? 2000) + 200}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -194,28 +388,53 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                 void send(input);
               }
             }}
-            placeholder={t('Stel een vraag of geef een opdracht…', 'Ask a question or give an instruction…')}
-            aria-label={t('Bericht aan de assistent', 'Message to the assistant')}
+            placeholder={t('Vraag wat u wilt…', 'Ask anything…')}
+            aria-label={t('Vraag aan de assistent', 'Question to the assistant')}
+            disabled={status ? !status.enabled : false}
           />
-          <button type="submit" className="btn assist solid" disabled={busy || !input.trim()} aria-label={t('Versturen', 'Send')}>
-            <Send size={18} />
-          </button>
+          {busy ? (
+            <button type="button" className="btn danger solid" onClick={() => stopper.current?.abort()} aria-label={t('Stoppen', 'Stop')} title={t('Stoppen', 'Stop')}>
+              <Square size={16} />
+            </button>
+          ) : (
+            <button type="submit" className="btn assist solid" disabled={!input.trim() || (status ? !status.enabled : false)} aria-label={t('Versturen', 'Send')} title={t('Versturen', 'Send')}>
+              <Send size={18} />
+            </button>
+          )}
         </form>
+        <div className="xs muted chat-disclaimer">
+          {input.length > 1800 ? (
+            <span className={input.length > (status?.limits.question ?? 2000) ? 'danger-text' : ''}>
+              {input.length} / {status?.limits.question ?? 2000}
+            </span>
+          ) : (
+            t('De assistent kan zich vergissen. Controleer belangrijke gegevens in het dossier.', 'The assistant can make mistakes. Check important details in the record.')
+          )}
+        </div>
       </div>
-    </section>
+    </aside>
   );
 }
 
 function MessageView({ m, last, onSuggest }: { m: Message; last: boolean; onSuggest: (s: string) => void }) {
-  if (m.role === 'user') return <div className="msg user">{m.content}</div>;
+  const { t, language } = usePrefs();
+  if (m.role === 'user') return <div className={`msg user${m.failed ? ' failed' : ''}`}>{m.content}</div>;
+  const tools = (m.toolsUsed ?? []).map((x) => TOOL_LABEL[x]?.[language === 'en' ? 1 : 0] ?? x);
   return (
-    <div className="msg assistant">
-      {m.content}
+    <div className={`msg assistant${m.failed ? ' failed' : ''}`}>
+      {m.notice && <div className="msg-notice xs">{m.notice}</div>}
+      {m.engine && !m.engine.offline ? <Markdown text={m.content} /> : <div className="pre-line">{m.content}</div>}
       {m.cards && m.cards.length > 0 && (
         <div className="msg-cards">
           {m.cards.map((c, i) => (
-            <CardView key={i} card={c} interactionId={m.pending?.interactionId ?? m.interactionId ?? ''} />
+            <CardView key={i} card={c} interactionId={m.pending?.interactionId ?? m.interactionId ?? ''} full={Boolean(m.engine && !m.engine.offline)} />
           ))}
+        </div>
+      )}
+      {(tools.length > 0 || m.engine) && (
+        <div className="msg-meta xs muted">
+          {m.engine?.offline ? t('Ingebouwde assistent', 'Built-in assistant') : m.engine ? `${PROVIDER[m.engine.provider] ?? m.engine.provider}` : ''}
+          {tools.length > 0 && `${m.engine ? ', ' : ''}${t('gebruikt', 'used')}: ${tools.join(', ')}`}
         </div>
       )}
       {last && m.suggestions && m.suggestions.length > 0 && (
@@ -231,7 +450,8 @@ function MessageView({ m, last, onSuggest }: { m: Message; last: boolean; onSugg
   );
 }
 
-function CardView({ card, interactionId }: { card: Card; interactionId: string }) {
+/** `full`: the answer text came from the model, which never saw the details, so the card carries them. */
+function CardView({ card, interactionId, full = false }: { card: Card; interactionId: string; full?: boolean }) {
   const { t, language } = usePrefs();
   if (card.kind === 'LIST' && card.rows) {
     return (
@@ -254,9 +474,33 @@ function CardView({ card, interactionId }: { card: Card; interactionId: string }
       </div>
     );
   }
+  if (card.kind === 'NOTE') {
+    return (
+      <div className="mini-card note-card small" role="note">
+        <ShieldCheck size={15} aria-hidden="true" />
+        <span>
+          <strong>{card.title}</strong> {card.body}
+        </span>
+      </div>
+    );
+  }
   if (card.kind === 'SUMMARY') {
     return (
       <div className="mini-card">
+        {full && (
+          <>
+            <div className="small strong">{card.title}</div>
+            {card.bullets && card.bullets.length > 0 && (
+              <ul>
+                {card.bullets.map((b) => (
+                  <li key={b} className="small">
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
         {card.keySentences && card.keySentences.length > 0 && (
           <>
             <div className="small strong">{t('Uit de stukken', 'From the records')}</div>

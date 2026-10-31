@@ -89,6 +89,7 @@ export const RETENTION_ACTION = (t: T, a: string | null) =>
 
 export const AI_FEATURE = (t: T, f: string) =>
   ({
+    assistant: t('Assistentpaneel (vraag alles)', 'Assistant panel (ask anything)'),
     chat: t('Chat-assistent', 'Chat assistant'),
     intake: t('Velden voorstellen bij registratie', 'Propose registration fields'),
     summary: t('Samenvatten', 'Summaries'),
@@ -194,6 +195,8 @@ const AUDIT_TYPES: Record<string, [string, string]> = {
   INTEGRITY_CHECK_RUN: ['Integriteitscontrole', 'Integrity check'],
   AI_SUGGESTION_ACCEPTED: ['Voorstel assistent overgenomen', 'Assistant suggestion accepted'],
   AI_SUGGESTION_REJECTED: ['Voorstel assistent afgewezen', 'Assistant suggestion rejected'],
+  AI_QUESTION_ANSWERED: ['Vraag aan assistent beantwoord', 'Assistant question answered'],
+  AI_QUESTION_FAILED: ['Vraag aan assistent mislukt', 'Assistant question failed'],
   INTEGRATION_KEY_CREATED: ['Koppelsleutel aangemaakt', 'Integration key created'],
   INTEGRATION_KEY_REVOKED: ['Koppelsleutel ingetrokken', 'Integration key revoked'],
   WIJSAMEN_REPORT_RECEIVED: ['Melding WijSamen ontvangen', 'WijSamen report received'],

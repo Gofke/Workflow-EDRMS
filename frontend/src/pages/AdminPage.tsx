@@ -312,6 +312,7 @@ function ResetDialog({ person, onClose }: { person: PersonRow; onClose: () => vo
 const KINDS: Record<string, [string, string]> = {
   CABINET: ['Kabinet', 'Cabinet'],
   DIRECTORATE: ['Directoraat', 'Directorate'],
+  SUB_DIRECTORATE: ['Onderdirectoraat', 'Sub-directorate'],
   DEPARTMENT: ['Afdeling', 'Department'],
   DISTRICT: ['District', 'District'],
   OFFICE: ['Bureau', 'Office'],
@@ -349,9 +350,10 @@ function UnitsTab() {
               </tr>
             </thead>
             <tbody>
-              {data.map((u) => (
+              {inTreeOrder(data).map(({ unit: u, depth }) => (
                 <tr key={u.id} style={u.isActive ? undefined : { opacity: 0.6 }}>
-                  <td>
+                  <td style={{ paddingLeft: 14 + depth * 22 }}>
+                    {depth > 0 && <span className="tree-elbow" aria-hidden="true" />}
                     <strong>{u.name}</strong> <span className="stamp">{u.code}</span>
                     <div className="xs muted">{KINDS[u.kind] ? t(KINDS[u.kind][0], KINDS[u.kind][1]) : u.kind}</div>
                   </td>
@@ -372,6 +374,31 @@ function UnitsTab() {
       {editing && <UnitDialog unit={editing === 'new' ? null : editing} units={data ?? []} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), forgetPeople(), void reload())} />}
     </div>
   );
+}
+
+/** Minister → directorates → sub-directorates → departments: parents first, children indented under them. */
+function inTreeOrder(units: Unit[]): { unit: Unit; depth: number }[] {
+  const ids = new Set(units.map((u) => u.id));
+  const children = new Map<string | null, Unit[]>();
+  for (const u of units) {
+    const key = u.parentUnitId && ids.has(u.parentUnitId) ? u.parentUnitId : null;
+    children.set(key, [...(children.get(key) ?? []), u]);
+  }
+  const rank: Record<string, number> = { CABINET: 0, DIRECTORATE: 1, SUB_DIRECTORATE: 2, DEPARTMENT: 3, SERVICE: 4, OFFICE: 5, DISTRICT: 6 };
+  const sorted = (list: Unit[]) => [...list].sort((a, b) => (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9) || a.name.localeCompare(b.name, 'nl'));
+  const out: { unit: Unit; depth: number }[] = [];
+  const seen = new Set<string>();
+  const walk = (parent: string | null, depth: number) => {
+    for (const u of sorted(children.get(parent) ?? [])) {
+      if (seen.has(u.id)) continue;
+      seen.add(u.id);
+      out.push({ unit: u, depth });
+      walk(u.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  for (const u of units) if (!seen.has(u.id)) out.push({ unit: u, depth: 0 });
+  return out;
 }
 
 function UnitDialog({ unit, units, onClose, onSaved }: { unit: Unit | null; units: Unit[]; onClose: () => void; onSaved: () => void }) {
@@ -683,11 +710,24 @@ function RolePicker({ label, value, onChange, exclude = [] }: { label: string; v
 
 // ------------------------------------------------------------------ assistant
 
+interface ServerAi {
+  provider: string;
+  model: string;
+  fallbackModels: string[];
+  baseUrl: string | null;
+  tier: 'free' | 'paid';
+  keyPresent: boolean;
+  dataPolicy: 'metadata' | 'records';
+  hourlyLimit: number;
+  pinned: string[];
+}
+
 function AssistantTab() {
   const { t } = usePrefs();
   const { refresh } = useSession();
   const toast = useToast();
   const { data, error, reload } = useApi<Settings>('/api/settings');
+  const server = useApi<{ data: ServerAi }>('/api/v1/ai/config');
   const [v, setV] = useState<Record<string, unknown> | null>(null);
   const [check, setCheck] = useState<{ reachable: boolean; models: string[]; error?: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -700,22 +740,46 @@ function AssistantTab() {
   const provider = String(v.provider);
   const set = (patch: Record<string, unknown>) => setV({ ...v, ...patch });
   const dirty = JSON.stringify(v) !== JSON.stringify(data.ai);
+  const fixed = server.data?.data;
+  const pinned = (k: string) => Boolean(fixed?.pinned.includes(k));
+  const external = ['gemini', 'anthropic'].includes(pinned('provider') ? (fixed?.provider ?? provider) : provider);
+  const effectiveProvider = fixed?.provider ?? provider;
+  // When the server fixes the provider, the screen shows that one as chosen.
+  const shown = pinned('provider') ? effectiveProvider : provider;
   return (
     <div className="split">
       <div className="stack" style={{ '--gap': '20px' } as React.CSSProperties}>
+        {fixed && fixed.pinned.length > 0 && (
+          <Notice tone="info" title={t('Vastgelegd op de server', 'Fixed on the server')}>
+            {t('Deze waarden komen uit de serverconfiguratie en gaan voor wat hier staat', 'These values come from the server configuration and take precedence over this screen')}:{' '}
+            {fixed.pinned.includes('provider') && <span className="mono">AI_PROVIDER={fixed.provider} </span>}
+            {fixed.pinned.includes('model') && <span className="mono">AI_MODEL={fixed.model} </span>}
+            {fixed.pinned.includes('fallbackModels') && <span className="mono">AI_FALLBACK_MODELS={fixed.fallbackModels.join(',')} </span>}
+            {fixed.pinned.includes('hourlyLimit') && <span className="mono">AI_HOURLY_LIMIT={fixed.hourlyLimit}</span>}
+          </Notice>
+        )}
+        {fixed && ['gemini', 'anthropic'].includes(effectiveProvider) && !fixed.keyPresent && (
+          <Notice tone="danger" title={t('Sleutel ontbreekt', 'Key missing')}>
+            {t(
+              'AI_API_KEY is niet ingesteld op de server. Tot dan antwoordt de ingebouwde assistent. Zet de sleutel in het .env-bestand van de server, nooit in dit scherm, in git of in een document.',
+              'AI_API_KEY is not set on the server. Until then the built-in assistant answers. Put the key in the server’s .env file — never on this screen, in git or in a document.',
+            )}
+          </Notice>
+        )}
         <Panel title={t('Welke assistent', 'Which assistant')}>
           <div className="stack">
             <div className="provider-list" role="radiogroup" aria-label={t('Soort assistent', 'Kind of assistant')}>
               {(
                 [
-                  ['builtin', t('Ingebouwd (aanbevolen)', 'Built-in (recommended)'), t('Draait op deze server. Gratis, geen internet, er gaat niets naar buiten. Herkent velden, termijnen, dubbele stukken, vat samen, maakt concepten en beantwoordt vragen over het werk.', 'Runs on this server. Free, no internet, nothing leaves it. Recognises fields, deadlines, duplicates, summarises, drafts and answers questions about the work.')],
-                  ['ollama', t('Open-source taalmodel op het eigen netwerk (Ollama)', 'Open-source language model on the ministry network (Ollama)'), t('Gratis. Een eigen server met bijvoorbeeld Llama of Mistral. Schrijft vloeiender en kan vertalen. Valt terug op de ingebouwde assistent als het model niet antwoordt.', 'Free. A ministry server running for example Llama or Mistral. Writes more fluently and can translate. Falls back to the built-in assistant if the model does not answer.')],
+                  ['builtin', t('Ingebouwd', 'Built-in'), t('Draait op deze server. Gratis, geen internet, er gaat niets naar buiten. Herkent velden, termijnen, dubbele stukken, vat samen, maakt concepten en beantwoordt vragen over het werk.', 'Runs on this server. Free, no internet, nothing leaves it. Recognises fields, deadlines, duplicates, summarises, drafts and answers questions about the work.')],
+                  ['gemini', t('Google Gemini, gratis laag (aanbevolen voor het assistentpaneel)', 'Google Gemini, free tier (recommended for the assistant panel)'), t('Beantwoordt elke vraag zoals ChatGPT, met de gegevens die de medewerker mag zien. Gratis met een sleutel uit Google AI Studio. Alleen kenmerken (nummers, status, data, namen van eenheden en behandelaars) gaan naar Google; onderwerpen, documenten en vertrouwelijke stukken nooit.', 'Answers any question like ChatGPT, with the data the person may see. Free with a key from Google AI Studio. Only attributes (numbers, statuses, dates, unit and handler names) go to Google; subjects, documents and confidential records never.')],
+                  ['ollama', t('Open-source taalmodel op het eigen netwerk (Ollama)', 'Open-source language model on the ministry network (Ollama)'), t('Gratis. Een eigen server met bijvoorbeeld Llama of Mistral. Er gaat niets naar buiten.', 'Free. A ministry server running for example Llama or Mistral. Nothing leaves the network.')],
                   ['openai-compatible', t('Ander model met een OpenAI-compatibele koppeling', 'Another model with an OpenAI-compatible interface'), t('Bijvoorbeeld LM Studio of vLLM op het eigen netwerk.', 'For example LM Studio or vLLM on the ministry network.')],
                   ['anthropic', t('Externe dienst (Claude)', 'External service (Claude)'), t('Betaald en buiten het netwerk. Vertrouwelijke en geheime stukken gaan er nooit naartoe.', 'Paid and outside the network. Confidential and secret records never go there.')],
                 ] as const
               ).map(([value, label, hint]) => (
-                <label key={value} className={`provider ${provider === value ? 'on' : ''}`}>
-                  <input type="radio" name="provider" checked={provider === value} onChange={() => set({ provider: value })} />
+                <label key={value} className={`provider ${shown === value ? 'on' : ''}`}>
+                  <input type="radio" name="provider" checked={shown === value} disabled={pinned('provider')} onChange={() => set({ provider: value, ...(value === 'gemini' && !/gemini/.test(String(v.model)) ? { model: 'gemini-flash-latest', fallbackModels: ['gemini-flash-lite-latest'] } : {}) })} />
                   <span>
                     <strong>{label}</strong>
                     <span className="xs muted" style={{ display: 'block' }}>
@@ -725,22 +789,75 @@ function AssistantTab() {
                 </label>
               ))}
             </div>
-            {provider !== 'builtin' && (
+            {shown !== 'builtin' && (
               <div className="form-grid">
-                <Field label={t('Adres', 'Address')} hint={provider === 'ollama' ? 'http://ai-server.juspol.local:11434/v1' : undefined}>
-                  <input className="input mono" value={String(v.baseUrl ?? '')} onChange={(e) => set({ baseUrl: e.target.value })} />
+                {shown !== 'gemini' && (
+                  <Field label={t('Adres', 'Address')} hint={provider === 'ollama' ? 'http://ai-server.juspol.local:11434/v1' : undefined}>
+                    <input className="input mono" value={String(v.baseUrl ?? '')} onChange={(e) => set({ baseUrl: e.target.value })} disabled={pinned('baseUrl')} />
+                  </Field>
+                )}
+                <Field label={t('Model', 'Model')} hint={shown === 'gemini' ? 'gemini-flash-latest' : undefined}>
+                  <input className="input mono" value={pinned('model') ? (fixed?.model ?? '') : String(v.model ?? '')} onChange={(e) => set({ model: e.target.value })} disabled={pinned('model')} />
                 </Field>
-                <Field label={t('Model', 'Model')}>
-                  <input className="input mono" value={String(v.model ?? '')} onChange={(e) => set({ model: e.target.value })} />
+                <Field label={t('Reservemodellen (bij drukte of gratis limiet)', 'Fallback models (when busy or over the free limit)')} hint={t('Zelfde aanbieder en sleutel, gescheiden door komma’s. Bijvoorbeeld gemini-flash-lite-latest.', 'Same provider and key, comma-separated. For example gemini-flash-lite-latest.')}>
+                  <input
+                    className="input mono"
+                    value={pinned('fallbackModels') ? (fixed?.fallbackModels ?? []).join(', ') : ((v.fallbackModels as string[]) ?? []).join(', ')}
+                    onChange={(e) => set({ fallbackModels: e.target.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3) })}
+                    disabled={pinned('fallbackModels')}
+                  />
                 </Field>
-                {provider === 'anthropic' && (
+                {external && (
                   <label className="check wide">
                     <input type="checkbox" checked={Boolean(v.externalProviderAcknowledged)} onChange={(e) => set({ externalProviderAcknowledged: e.target.checked })} />
-                    {t('Ik bevestig dat tekst van interne stukken het netwerk mag verlaten. De sleutel staat in de serverconfiguratie (AI_API_KEY), niet hier.', 'I confirm that text from internal records may leave the network. The key is in the server configuration (AI_API_KEY), not here.')}
+                    {t('Ik bevestig dat gegevens volgens het gegevensbeleid hieronder het netwerk mogen verlaten. De sleutel staat in de serverconfiguratie (AI_API_KEY), niet hier.', 'I confirm that data may leave the network according to the data policy below. The key is in the server configuration (AI_API_KEY), not here.')}
                   </label>
                 )}
               </div>
             )}
+          </div>
+        </Panel>
+        <Panel title={t('Assistentpaneel', 'Assistant panel')}>
+          <div className="stack">
+            <fieldset className="plain">
+              <legend className="small strong">{t('Wat mag naar het taalmodel', 'What may go to the language model')}</legend>
+              <label className="check">
+                <input type="radio" name="dataPolicy" checked={v.dataPolicy !== 'records'} onChange={() => set({ dataPolicy: 'metadata' })} />
+                {t('Alleen kenmerken: nummers, status, data, eenheden en behandelaars (aanbevolen, verplicht bij gratis Gemini)', 'Attributes only: numbers, statuses, dates, units and handlers (recommended, required with free Gemini)')}
+              </label>
+              <label className="check">
+                <input type="radio" name="dataPolicy" checked={v.dataPolicy === 'records'} disabled={effectiveProvider === 'gemini' && fixed?.tier !== 'paid'} onChange={() => set({ dataPolicy: 'records' })} />
+                {t('Ook onderwerpen en tekst van open en interne stukken (alleen betaalde laag of eigen server)', 'Also subjects and text of open and internal records (paid tier or own server only)')}
+              </label>
+            </fieldset>
+            <fieldset className="plain">
+              <legend className="small strong">{t('Waarover de assistent antwoordt', 'What the assistant answers about')}</legend>
+              <label className="check">
+                <input type="radio" name="scope" checked={v.scope !== 'work'} onChange={() => set({ scope: 'broad' })} />
+                {t('Alles: het werk in het systeem en algemene kantoorvragen', 'Anything: the work in the system and general office questions')}
+              </label>
+              <label className="check">
+                <input type="radio" name="scope" checked={v.scope === 'work'} onChange={() => set({ scope: 'work' })} />
+                {t('Alleen het werk in het systeem', 'Only the work in the system')}
+              </label>
+            </fieldset>
+            <div className="form-grid">
+              <Field label={t('Vragen per medewerker per uur', 'Questions per person per hour')}>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={pinned('hourlyLimit') ? (fixed?.hourlyLimit ?? '') : Number(v.hourlyLimit ?? 30)}
+                  onChange={(e) => set({ hourlyLimit: Math.max(1, Math.min(1000, Number(e.target.value) || 1)) })}
+                  disabled={pinned('hourlyLimit')}
+                />
+              </Field>
+              <label className="check wide">
+                <input type="checkbox" checked={v.offlineFallback !== false} onChange={(e) => set({ offlineFallback: e.target.checked })} />
+                {t('Als het taalmodel niet antwoordt (limiet, storing), antwoordt de ingebouwde assistent', 'When the language model does not answer (limit, outage), the built-in assistant answers')}
+              </label>
+            </div>
           </div>
         </Panel>
         <Panel title={t('Functies', 'Features')}>
@@ -800,7 +917,9 @@ function AssistantTab() {
       </div>
       <Panel title={t('Zo blijft het veilig', 'How it stays safe')}>
         <ul className="small stack" style={{ margin: 0, paddingLeft: 18, gap: 8 }}>
-          <li>{t('De assistent ziet per medewerker alleen wat die medewerker mag zien.', 'The assistant sees, per person, only what that person may see.')}</li>
+          <li>{t('De assistent ziet per medewerker alleen wat die medewerker mag zien, en antwoordt binnen diens lijn: de Minister over het hele ministerie, een Directeur over het directoraat, een Onder-Directeur over het onderdirectoraat, een medewerker over de eigen afdeling.', 'The assistant sees, per person, only what that person may see, and answers within their line: the Minister about the whole ministry, a Directeur about the directorate, an Onder-Directeur about the sub-directorate, an employee about their own department.')}</li>
+          <li>{t('Dat wordt op de server afgedwongen, in elke zoekopdracht, niet in de opdracht aan het taalmodel.', 'This is enforced on the server, in every query — not in the instructions to the language model.')}</li>
+          <li>{t('In het logboek staat wie wat vroeg, wanneer en met welke hulpmiddelen, maar nooit de tekst van de vraag of het antwoord.', 'The log records who asked, when and with which tools — never the text of the question or answer.')}</li>
           <li>{t('Vertrouwelijke en geheime stukken gaan nooit naar een dienst buiten het netwerk; dan antwoordt de ingebouwde assistent.', 'Confidential and secret records never go to a service outside the network; the built-in assistant answers instead.')}</li>
           <li>{t('Elk voorstel en wat ermee gebeurde, staat in het logboek, met model en tijd.', 'Every suggestion and what was done with it is in the log, with model and time.')}</li>
           <li>{t('Niets wordt geregistreerd, verstuurd of beslist zonder bevestiging van een medewerker.', 'Nothing is registered, sent or decided without a person’s confirmation.')}</li>
