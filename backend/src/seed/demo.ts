@@ -34,6 +34,7 @@ import { canonicalJson } from '../core/seal.service';
 import { findDeadlines } from '../ai/engine/dates';
 import { dateDaysAgo, fillerLetters, imagePdf, LetterSpec, letterDate, letterPdf, LETTERS, scanOf, soundMeterPng, workingDayBack } from './demo-content';
 import { ROLES, UNITS, USERS } from './seed';
+import { CONTRACTOR_UNIT, PROJECT_STAFF, registerProjects } from './demo-projects';
 
 type Agent = ReturnType<typeof request.agent>;
 
@@ -403,7 +404,7 @@ async function main() {
   if (n > 0 && !reset) throw new Error('This database already holds letters. Run with --reset to replace everything with the demonstration data.');
   const tables: { tablename: string }[] = await db.query(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('migrations')`);
   await db.query(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
-  for (const s of ['registration_sequence', 'dossier_sequence', 'task_sequence']) await db.query(`ALTER SEQUENCE ${s} RESTART WITH 1`);
+  for (const s of ['registration_sequence', 'dossier_sequence', 'task_sequence', 'project_sequence']) await db.query(`ALTER SEQUENCE ${s} RESTART WITH 1`);
 
   const clock = new Clock(db);
   await clock.init();
@@ -452,6 +453,15 @@ async function main() {
       const created = await ok(admin.post('/api/admin/accounts').send({ fullName: p.fullName, jobPosition: p.job, email: p.email, unitId: demo.units.get(p.unit), roles: p.roles, initialPassword: PASSWORD }), 201);
       demo.ids.set(p.email, created.id ?? created.accountId);
       if (p.head) await ok(admin.put(`/api/org/units/${demo.units.get(p.unit)}`).send({ headAccountId: demo.ids.get(p.email) }), 200);
+    }
+    // V0.5.0: the contractors' unit and 78 more staff, for the projects (100 accounts in all).
+    {
+      const created = await ok(admin.post('/api/org/units').send({ code: CONTRACTOR_UNIT.code, name: CONTRACTOR_UNIT.name, kind: CONTRACTOR_UNIT.kind, parentUnitId: demo.units.get(CONTRACTOR_UNIT.parent) }), 201);
+      demo.units.set(CONTRACTOR_UNIT.code, created.id);
+    }
+    for (const p of PROJECT_STAFF) {
+      const created = await ok(admin.post('/api/admin/accounts').send({ fullName: p.fullName, jobPosition: p.job, email: p.email, unitId: demo.units.get(p.unit), roles: p.roles, initialPassword: PASSWORD }), 201);
+      demo.ids.set(p.email, created.id ?? created.accountId);
     }
     // Account creation may require a password change at first sign-in; demo accounts are ready to use.
     await db.query(`UPDATE account SET password_hash = $1`, [passwordHash]).catch(() => undefined);
@@ -985,6 +995,18 @@ async function main() {
     await demo.task(DIR, { title: 'Ontvangstbevestiging sturen aan de familie Pinas', assigneeAccountId: demo.id(A1), itemId: demo.items.get('transfer')!.id, dueIn: 2, priority: 'MEDIUM' });
     await demo.task(DIR, { title: 'Agenda staf-overleg maandag voorbereiden', assigneeAccountId: demo.id(A1), dueIn: 3, priority: 'MEDIUM', checklist: ['Stand begroting', 'Vragen DNA', 'Inspectierapport Santo Boma'] });
     await demo.task(MIN, { title: 'Toespraak opening justitiecomplex Nickerie', assigneeAccountId: demo.id(DIR), dueIn: 12, priority: 'HIGH' });
+  });
+
+  // V0.5.0: twelve projects at every stage, run by the people concerned.
+  registerProjects({
+    db,
+    as: (email) => demo.as(email),
+    id: (email) => demo.id(email),
+    unit: (code) => demo.units.get(code)!,
+    due: (n) => demo.due(n),
+    later: (table, column, id) => clock.later(table, column, id),
+    on,
+    ok,
   });
 
   const days = [...events.keys()].sort((a, b) => b - a);
