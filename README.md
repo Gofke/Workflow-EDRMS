@@ -1,4 +1,4 @@
-# JusPol EDRMS — V0.4.1
+# JusPol EDRMS — V0.5.0
 
 Records, case and task management for the Ministry of Justice and Police,
 Suriname. Phase 3 merges the two earlier panels into one system:
@@ -28,6 +28,19 @@ department and an employee about their department. The organisation now has
 sub-directorates (Minister → directorates → sub-directorates → departments →
 employees).
 
+V0.5.0 adds **projects**: from business case to handover. Each project has an
+owner (opdrachtgever), a project manager (projectleider), stakeholders and
+team members. The project manager writes the business case; the owner
+approves it or sends it back with a reason. Approval closes the first phase
+and opens the next. The work is divided into tickets per phase, shown on a
+Gantt chart, and the owner signs off the last phase. Access is need-to-know:
+a team member, such as an external contractor, sees only their own tickets; a
+stakeholder sees the business case and the phases but not the tickets; the
+line of command sees status and progress; a confidential project is visible
+only to the people on it. The assistant answers questions about projects
+within the same rules, and never sends project names, ticket titles or
+anything from a confidential project to the AI provider.
+
 The feature document `JusPol-EDRMS-V0.4.0-Features.pdf` describes every
 feature with a screenshot. This README is for whoever installs and runs it.
 
@@ -37,6 +50,7 @@ feature with a screenshot. This README is for whoever installs and runs it.
 | Frontend | React 18, TypeScript, Vite; installable PWA |
 | Sessions | Server-side in PostgreSQL, HttpOnly + Secure cookie, optional two-step verification |
 | Seals | Ed25519 system seal with QR code and public check page |
+| Projects | Business case gate, phases (3–8) with tickets, Gantt chart, need-to-know access per project role |
 | Assistant | Chat panel on Google Gemini (free tier) with role- and line-filtered read-only tools; built-in offline engine as fallback; Ollama, OpenAI-compatible or Anthropic by settings |
 | Documents | Content-addressed storage (SHA-256), OCR in Dutch and English, virus scan hook |
 
@@ -173,9 +187,9 @@ npm run build               # output in frontend/dist
 sudo apt-get update && sudo apt-get install -y nginx postgresql certbot python3-certbot-nginx curl poppler-utils imagemagick
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs   # if Node.js < 20
 
-tar -xzf juspol-edrms-0.4.1.tar.gz ./deploy/install.sh
+tar -xzf juspol-edrms-0.5.0.tar.gz ./deploy/install.sh
 sudo bash deploy/install.sh install --env staging --domain <name pointing at the server> \
-     --port 4611 --release juspol-edrms-0.4.1.tar.gz --email <e-mail for the certificate>
+     --port 4611 --release juspol-edrms-0.5.0.tar.gz --email <e-mail for the certificate>
 sudo bash deploy/install.sh demo --env staging     # demonstration accounts; asks for their password
 ```
 
@@ -184,7 +198,7 @@ while the certificate cannot be obtained yet; production only signs in over
 HTTPS.
 
 Check `https://<server>/api/health`:
-`{"status":"ok","version":"0.4.1","database":"reachable"}` and
+`{"status":"ok","version":"0.5.0","database":"reachable"}` and
 `https://<server>/api/v1/health` (environment, version, assistant state).
 
 ## Demonstration data
@@ -199,6 +213,13 @@ two directorates with four sub-directorates, departments and offices (16 units),
 25 matters with decisions, 29 tasks, advice, replies with seals, WijSamen
 reports and an exchange with another ministry, spread over ten months. All
 people and letters are invented. Every account uses the `SEED_PASSWORD`.
+
+Since V0.5.0 the demonstration has **100 accounts** (78 more people, among them
+two internal auditors and six external contractors in the unit *Externe
+leveranciers*) and **12 projects** in every stage: one completed, running
+projects on schedule and behind, one confidential, one on hold, and business
+cases as a draft, awaiting the owner and returned. `docs/ai/PROJECTS-DEMO-QUESTIONS.md`
+lists who to sign in as and which questions to ask the assistant per role.
 
 | Account | Role |
 |---|---|
@@ -226,10 +247,11 @@ cd frontend && npm test                                     # component tests
 
 The integration suite runs against a real, dedicated test database, because
 much of what it protects (append-only audit rules, the hash chain, triggers,
-constraints) lives in the database. 26 spec files (379 tests) cover authentication,
+constraints) lives in the database. 30 spec files (423 tests) cover authentication,
 administration, registration, dossiers, documents, delegation, workflow,
 timeline, tasks, approvals, case files, letters and seals, notifications,
-search and dashboards, the assistant, oversight and integrations. The
+search and dashboards, the assistant, oversight, integrations, the session
+cookie per environment, and projects with their need-to-know access. The
 assistant's tests use fakes only — a scripted model and a fake Gemini server;
 never a real model or a real key — and include leak tests with planted text,
 the tool matrix per role, the line of command, error mapping and the audit
