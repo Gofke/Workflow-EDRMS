@@ -24,6 +24,8 @@ import { Actor } from '../../records/registration.service';
 import { WorkingDaysService, addDays } from '../../core/working-days.service';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { TasksService } from '../../tasks/tasks.service';
+import type { ProjectsService } from '../../projects/projects.service';
+import { PROJECT_TOOLS } from './project-tools';
 import { BUILD_VERSION } from '../../version';
 import { AiService } from '../ai.service';
 import { Card } from '../chat.service';
@@ -34,6 +36,7 @@ export interface ToolContext {
   db: DataSource;
   access: AccessService;
   tasks: TasksService;
+  projects: ProjectsService;
   dashboard: DashboardService;
   ai: AiService;
   workingDays: WorkingDaysService;
@@ -227,11 +230,15 @@ const FROM: Record<Kind, string> = {
           LEFT JOIN dossier td ON td.id = t.dossier_id LEFT JOIN correspondence_item tci ON tci.id = t.correspondence_item_id`,
 };
 
+/** A ticket of a confidential project: as restricted as a confidential record. */
+const CONFIDENTIAL_TICKET = `EXISTS (SELECT 1 FROM project_milestone pm_c JOIN project p_c ON p_c.id = pm_c.project_id
+                                      WHERE pm_c.id = t.project_milestone_id AND p_c.classification = 'CONFIDENTIAL')`;
+
 /** Confidential and secret records: the model never gets them, not even as a count under a filter. */
 const IS_RESTRICTED: Record<Kind, string> = {
   letters: `ci.classification IN ('CONFIDENTIAL','SECRET')`,
   matters: `d.classification IN ('CONFIDENTIAL','SECRET')`,
-  tasks: `(coalesce(td.classification, '') IN ('CONFIDENTIAL','SECRET') OR coalesce(tci.classification, '') IN ('CONFIDENTIAL','SECRET'))`,
+  tasks: `(coalesce(td.classification, '') IN ('CONFIDENTIAL','SECRET') OR coalesce(tci.classification, '') IN ('CONFIDENTIAL','SECRET') OR ${CONFIDENTIAL_TICKET})`,
 };
 
 const LETTER_DATE = `(coalesce(ci.registered_at, ci.created_at) AT TIME ZONE 'America/Paramaribo')::date`;
@@ -345,8 +352,8 @@ const SELECT: Record<Kind, string> = {
             ou.name AS unit, hp.full_name AS handler, dc.name AS category`,
   tasks: `t.id, t.reference AS ref, t.title, t.status, t.priority, to_char(t.due_date, 'YYYY-MM-DD') AS due,
           to_char((t.created_at AT TIME ZONE 'America/Paramaribo')::date, 'YYYY-MM-DD') AS d, ou.name AS unit, ap.full_name AS handler,
-          greatest(CASE WHEN td.classification IN ('CONFIDENTIAL','SECRET') THEN 1 ELSE 0 END,
-                   CASE WHEN tci.classification IN ('CONFIDENTIAL','SECRET') THEN 1 ELSE 0 END) = 1 AS restricted,
+          (coalesce(td.classification, '') IN ('CONFIDENTIAL','SECRET') OR coalesce(tci.classification, '') IN ('CONFIDENTIAL','SECRET')
+           OR ${CONFIDENTIAL_TICKET}) AS restricted,
           td.dossier_identity AS matter`,
 };
 
@@ -547,6 +554,13 @@ export const TOOLS: ToolSpec[] = [
             type: 'TASK', id: x.id, identity: x.reference, title: x.title, meta: x.overdue ? (en ? 'overdue' : 'te laat') : en ? 'due' : 'termijn', date: x.dueDate, link: `/taken/${x.id}`,
           })),
       ];
+      for (const pd of ((w as { projectDecisions?: { id: string; reference: string; name: string; kind: string }[] }).projectDecisions ?? []).slice(0, 3)) {
+        rows.unshift({
+          type: 'PROJECT', id: pd.id, identity: pd.reference, title: pd.name,
+          meta: pd.kind === 'BUSINESS_CASE' ? (en ? 'business case awaits your approval' : 'business case wacht op uw goedkeuring') : en ? 'ready for your sign-off' : 'klaar om af te tekenen',
+          date: null, link: `/projecten/${pd.id}`,
+        } as (typeof rows)[number]);
+      }
       if (rows.length) ctx.cards.push({ kind: 'LIST', title: en ? 'My work' : 'Mijn werk', rows, count: rows.length, link: '/' } as unknown as Card);
       // Tasks on confidential records are counted in the person's totals but never named to the model.
       const ids = w.tasks.map((x: { id: string }) => x.id);
@@ -570,6 +584,7 @@ export const TOOLS: ToolSpec[] = [
         mattersIAmResponsibleFor: s.responsibleMatters,
         myOverdueMatters: s.overdueMatters,
         draftsToRegister: s.draftsToRegister,
+        projectDecisionsWaitingForMe: (s as { projectDecisions?: number }).projectDecisions ?? 0,
         nextTasks: w.tasks
           .filter((x: { id: string }) => !restricted.has(x.id))
           .slice(0, 5)
@@ -908,6 +923,7 @@ export const TOOLS: ToolSpec[] = [
       };
     },
   },
+  ...PROJECT_TOOLS,
 ];
 
 function filterLabel(f: string, en: boolean): string {

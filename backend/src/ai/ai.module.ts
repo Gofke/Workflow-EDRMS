@@ -23,6 +23,7 @@ import { actorFrom, BUSINESS_ROLES, MANAGEMENT_ROLES } from '../common/actor';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { LettersModule } from '../letters/letters.module';
 import { TasksModule } from '../tasks/tasks.module';
+import { ProjectsModule } from '../projects/projects.module';
 import { AiService } from './ai.service';
 import { ChatService } from './chat.service';
 import { probe } from './llm';
@@ -250,7 +251,7 @@ export class AiController {
 }
 
 @Module({
-  imports: [AuthModule, TasksModule, LettersModule, DashboardModule],
+  imports: [AuthModule, TasksModule, ProjectsModule, LettersModule, DashboardModule],
   controllers: [AiController, AssistantController],
   providers: [AiService, ChatService, AssistantService],
   exports: [AiService],

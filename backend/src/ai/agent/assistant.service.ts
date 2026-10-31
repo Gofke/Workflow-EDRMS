@@ -19,6 +19,7 @@ import { DashboardService } from '../../dashboard/dashboard.service';
 import { Actor } from '../../records/registration.service';
 import { SettingsService } from '../../settings/settings.service';
 import { TasksService } from '../../tasks/tasks.service';
+import { ProjectsService } from '../../projects/projects.service';
 import { BUILD_VERSION } from '../../version';
 import { AiService, BUILTIN_MODEL } from '../ai.service';
 import { Card, ChatContext, ChatService } from '../chat.service';
@@ -58,20 +59,20 @@ const RESTRICTED_LEVELS = ['CONFIDENTIAL', 'SECRET'];
 
 const EXAMPLES: Record<string, { nl: string[]; en: string[] }> = {
   MINISTER: {
-    nl: ['Hoeveel zaken lopen er per directoraat?', 'Welke zaken wachten op mijn besluit?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Hoeveel brieven kwamen deze maand binnen?'],
-    en: ['How many matters are open per directorate?', 'Which matters await my decision?', 'Which matters are at risk of missing their deadline?', 'How many letters came in this month?'],
+    nl: ['Hoeveel zaken lopen er per directoraat?', 'Welke zaken wachten op mijn besluit?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Welke projecten lopen achter?'],
+    en: ['How many matters are open per directorate?', 'Which matters await my decision?', 'Which matters are at risk of missing their deadline?', 'Which projects are behind schedule?'],
   },
   DIRECTEUR: {
-    nl: ['Hoeveel open zaken heeft elke afdeling in mijn directoraat?', 'Welke taken zijn te laat in mijn lijn?', 'Wie werkt er bij Juridische Zaken?', 'Wat staat er vandaag voor mij klaar?'],
-    en: ['How many open matters does each department in my directorate have?', 'Which tasks are overdue in my line?', 'Who works at Legal Affairs?', 'What is waiting for me today?'],
+    nl: ['Hoeveel open zaken heeft elke afdeling in mijn directoraat?', 'Welke taken zijn te laat in mijn lijn?', 'Welke business cases wachten op mijn goedkeuring?', 'Wat staat er vandaag voor mij klaar?'],
+    en: ['How many open matters does each department in my directorate have?', 'Which tasks are overdue in my line?', 'Which business cases await my approval?', 'What is waiting for me today?'],
   },
   ONDER_DIRECTEUR: {
-    nl: ['Welke zaken in mijn onderdirectoraat verlopen deze week?', 'Hoeveel taken heeft elke medewerker open?', 'Welke brieven wachten nog op antwoord?', 'Wat staat er vandaag voor mij klaar?'],
-    en: ['Which matters in my sub-directorate are due this week?', 'How many open tasks does each colleague have?', 'Which letters are still awaiting a reply?', 'What is waiting for me today?'],
+    nl: ['Welke zaken in mijn onderdirectoraat verlopen deze week?', 'Hoeveel taken heeft elke medewerker open?', 'Hoe staan de projecten in mijn onderdirectoraat ervoor?', 'Wat staat er vandaag voor mij klaar?'],
+    en: ['Which matters in my sub-directorate are due this week?', 'How many open tasks does each colleague have?', 'How are the projects in my sub-directorate doing?', 'What is waiting for me today?'],
   },
   SUPPORT_STAFF: {
-    nl: ['Wat staat er vandaag voor mij klaar?', 'Welke van mijn taken zijn te laat?', 'Hoe registreer ik een brief?', 'Welke brieven van mijn afdeling wachten op antwoord?'],
-    en: ['What is waiting for me today?', 'Which of my tasks are overdue?', 'How do I register a letter?', 'Which letters of my department are awaiting a reply?'],
+    nl: ['Wat staat er vandaag voor mij klaar?', 'Welke van mijn taken zijn te laat?', 'Hoe registreer ik een brief?', 'Hoe staat mijn project ervoor?'],
+    en: ['What is waiting for me today?', 'Which of my tasks are overdue?', 'How do I register a letter?', 'How is my project doing?'],
   },
   RECORDS_MANAGER: {
     nl: ['Welke bewaartermijnen zijn verlopen?', 'Hoeveel zaken staan onder juridische blokkade?', 'Hoeveel brieven zijn er dit jaar geregistreerd, per maand?', 'Hoe werkt vernietiging na de bewaartermijn?'],
@@ -101,6 +102,7 @@ export class AssistantService {
     private readonly audit: AuditService,
     private readonly workingDays: WorkingDaysService,
     private readonly tasks: TasksService,
+    private readonly projects: ProjectsService,
     private readonly dashboard: DashboardService,
     private readonly ai: AiService,
     private readonly chat: ChatService,
@@ -363,6 +365,7 @@ export class AssistantService {
       db: this.db,
       access: this.access,
       tasks: this.tasks,
+      projects: this.projects,
       dashboard: this.dashboard,
       ai: this.ai,
       workingDays: this.workingDays,
@@ -427,7 +430,8 @@ export class AssistantService {
   private async pageContext(profile: Awaited<ReturnType<AccessService['profile']>>, page: string | null): Promise<{ ctx: ChatContext | null; label: string } | null> {
     if (!page) return null;
     const m = /^\/(post|zaken|taken)\/([0-9a-f-]{36})/i.exec(page);
-    if (!m) return { ctx: null, label: page.split('?')[0] };
+    // Other pages by their path only; an id in the path is not passed on.
+    if (!m) return { ctx: null, label: page.split('?')[0].replace(/\/[0-9a-f-]{36}.*$/i, ' (one item)') };
     const [, kind, id] = m;
     // A confidential record on screen is named to the model only as "a restricted letter/matter".
     if (kind === 'post' && (await this.access.canViewItem(profile, id))) {
