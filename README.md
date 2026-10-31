@@ -1,4 +1,4 @@
-# JusPol EDRMS — V0.4.0
+# JusPol EDRMS — V0.4.1
 
 Records, case and task management for the Ministry of Justice and Police,
 Suriname. Phase 3 merges the two earlier panels into one system:
@@ -156,14 +156,35 @@ npm run build               # output in frontend/dist
 
 - `deploy/pack.sh` builds a release; `deploy/install.sh` installs or updates one
   environment (staging or production) on Ubuntu: its own service user,
-  folder, settings file (640) and nginx site; refuses an address or port used
+  folder, settings file (640), PostgreSQL role and database (created with a
+  generated password when the settings name none), nginx site with the
+  security headers, and the certificate. It refuses an address or port used
   by another site and the production key on staging; checks health and rolls
-  back automatically when a new version does not start; obtains the
-  certificate (run again to retry). `deploy/install.sh status --env staging`
-  shows service, log and health. `deploy/test-install.sh` tests it with stubs.
+  back automatically when a new version does not start. Documents and keys
+  live in `/opt/juspol/<env>/storage` — **back that folder up with the
+  database.** `deploy/install.sh status --env staging` shows service, log and
+  health; `deploy/install.sh demo --env staging` loads the demonstration
+  ministry (never on production). `deploy/test-install.sh` tests it with stubs.
+
+### Quick start on a server (staging)
+
+```bash
+# once: the software the installer needs
+sudo apt-get update && sudo apt-get install -y nginx postgresql certbot python3-certbot-nginx curl poppler-utils imagemagick
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs   # if Node.js < 20
+
+tar -xzf juspol-edrms-0.4.1.tar.gz ./deploy/install.sh
+sudo bash deploy/install.sh install --env staging --domain <name pointing at the server> \
+     --port 4611 --release juspol-edrms-0.4.1.tar.gz --email <e-mail for the certificate>
+sudo bash deploy/install.sh demo --env staging     # demonstration accounts; asks for their password
+```
+
+On staging the session cookie follows the connection, so sign-in also works
+while the certificate cannot be obtained yet; production only signs in over
+HTTPS.
 
 Check `https://<server>/api/health`:
-`{"status":"ok","version":"0.4.0","database":"reachable"}` and
+`{"status":"ok","version":"0.4.1","database":"reachable"}` and
 `https://<server>/api/v1/health` (environment, version, assistant state).
 
 ## Demonstration data

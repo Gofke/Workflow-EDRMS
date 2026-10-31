@@ -1,5 +1,18 @@
 # Changelog
 
+## V0.4.1 — Installer ready for a real server
+
+- `deploy/install.sh`: documents and keys are stored in `/opt/juspol/<env>/storage` (the release folder is read-only for the service, so V0.4.0 could not create its sealing key there and did not start)
+- Release files readable by the service and by nginx (V0.4.0 left the release folder readable by root only)
+- `deploy/pack.sh` packs `backend/assets` (the fonts of every PDF: receipts, labels, reports, seals); V0.4.0 packed none, so a server could not make PDFs. The installer refuses a release without them
+- The PostgreSQL role and database `juspol_<env>` are created with a generated password when the settings name none; the template's example values (`change_me…`) no longer pass as filled in
+- Fresh `SESSION_SECRET` and `MFA_ENCRYPTION_KEY` for every environment; `PUBLIC_BASE_URL` follows the address that really works
+- The server is checked first (Node.js 20+, npm, nginx, PostgreSQL client, certbot) with the command to install what is missing
+- nginx site with the security headers (HSTS, CSP, nosniff), caching rules for the service worker and assets, as in `deploy/nginx.conf.example`
+- New `install.sh demo --env staging [--reset]`: loads the demonstration ministry; the accounts' password is asked hidden and never stored; refused on production
+- Session cookie on staging follows the connection (Secure over HTTPS), so staging works while its certificate cannot be obtained; production unchanged (HTTPS only)
+- Tests: backend 388 (session cookie per environment 9), frontend 40, installer 25 with stubs, and a real run on Ubuntu 24.04 (PostgreSQL 16, nginx 1.24, Node.js 22): install, update with database copy, demonstration data, sign-in, assistant and a PDF report through nginx
+
 ## V0.4.0 — Assistant panel on Gemini, line of command
 
 - "Vraag de assistent": a chat panel like ChatGPT on every page, docked on the right (full screen on a phone): model badge, examples per role, safe Markdown answers with record cards, Stop, new chat, questions left this hour, privacy notice for the free tier
