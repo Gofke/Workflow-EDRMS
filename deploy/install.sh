@@ -2,7 +2,7 @@
 # JusPol EDRMS — install or update one environment on an Ubuntu server.
 #
 #   sudo bash install.sh install --env staging --domain edrms-test.juspol.sr \
-#        --port 4611 --release juspol-edrms-0.4.1.tar.gz --email ict@juspol.sr [--no-tls]
+#        --port 4611 --release juspol-edrms-0.5.0.tar.gz --email ict@juspol.sr [--no-tls]
 #   sudo bash install.sh demo    --env staging [--reset]   (demonstration data; never production)
 #   sudo bash install.sh status  --env staging
 #

@@ -1,10 +1,44 @@
 # Changelog
 
-## Unreleased
+## V0.5.0 — Projects, from business case to handover
 
+- **Projecten**: each project has an owner (opdrachtgever), a project manager (projectleider), stakeholders and team members; number `PRJ-yyyy-nnn`; classification internal or confidential
+- Business case as the first phase: problem, solution, benefits, costs, risks and budget. The project manager submits it once its tickets are done; the owner approves it (phase 1 closes, the project starts, phase 2 opens) or returns it with a reason
+- Phases (3–8, standard four: business case, documentation and design, execution, closure and handover) with dates; the project manager closes a phase when its tickets are done; the owner signs off the last phase, which completes the project; hold, resume and cancel by the owner with a reason
+- Tickets are tasks in a phase, with an assignee, a start date and a due date, and the same comments, checklists, notifications and audit as every task
+- Planning tab with a Gantt chart of phases and tickets (late in red, filter "only what is late"); portfolio time line of all projects; progress per phase and per project
+- Need-to-know access, decided on the server: owner and project manager see everything; a stakeholder the business case, phases and team but no tickets; the line of command (Minister; directors and heads over the project's unit) a summary without the business case text or tickets; a team member, such as an external contractor, only their own tickets; a confidential project only the people on it. A ticket in a project is never visible through the line of command
+- Mijn werk shows business cases and sign-offs waiting for the owner; notifications for a project role, a submitted business case, the owner's decision and each new phase
+- Audit events for every step (`PROJECT_CREATED`, `BUSINESS_CASE_SUBMITTED/APPROVED/RETURNED`, `MILESTONE_CLOSED`, `PROJECT_STATUS_CHANGED`, `PROJECT_COMPLETED` and others); projects cannot be deleted
+- Assistant: new tools `projects` and `project_detail` with the same need-to-know as the screens; the model receives numbers, statuses, phases, dates and counts only — never project names, ticket titles or business case text under the metadata policy, and nothing from a confidential project (the person gets a card and a note); a project question in the examples of each business role
+- Independent review before release, in two rounds (15 findings, then 5 found while verifying the fixes), all fixed. Project data now stays need-to-know through every other route:
+  - an overdue ticket escalates to the project manager and then the owner, never up the line, and the audit log names only its number;
+  - a stand-in gets no copy of project or ticket notifications, and a notice about a ticket reaches only people who may open it (not a previous project manager, not someone mentioned from outside the project);
+  - a ticket does not repeat, so no copy is ever made outside the project;
+  - leaving a project ends following its tickets;
+  - a subtask of a ticket stays in the project: only for people on it, never linked to a matter or letter (also a database constraint), and it is not on any matter's timeline;
+  - the assistant's ordinary task tools treat a confidential project's tickets as confidential;
+  - phase names are not sent to the model under the metadata policy;
+  - the project history names tickets by number only, and the line of command gets no description or hold reason;
+  - ministry-wide counts (overview, departments, workload, weekly report) leave confidential tickets out.
+- The project rules are stricter:
+  - the project manager writes the business case and every save is audited;
+  - owner and project manager must be two different people, and whoever wrote or submitted a business case never decides on it, even after the roles are swapped;
+  - owner and project manager cannot be changed while a business case awaits the decision;
+  - a replaced project manager loses the tickets, which pass to the new one;
+  - only the owner or the project manager reassigns a ticket, to a ministry account, and the new holder joins the team with an audit entry;
+  - only the owner changes someone's role;
+  - a removed person who gets a ticket comes back as a team member only;
+  - no new tickets in the business case phase after submission, and no reopened tickets in a closed phase;
+  - gates count subtasks and are checked under a lock, which also makes a ticket that waited for the lock see a phase closed meanwhile;
+  - no new phase once the closure has started;
+  - resume needs a reason;
+  - cancelling a project cancels its open tickets.
+- Demonstration: 100 accounts (78 more people, among them two internal auditors and six external contractors) and 12 projects in every stage; `docs/ai/PROJECTS-DEMO-QUESTIONS.md` with the questions to ask per role and what must happen
 - `deploy/install.sh` accepts Google's new API key format (`AQ.…`), which AI Studio issues since 2026; the assistant already sends the key in the `x-goog-api-key` header that these keys need
 - `install.sh demo` checks the application's password rule (12 characters, three kinds of character) before loading; it allowed 10, so loading stopped at the first account
 - Installer test: 28 checks
+- Tests: backend 423 (projects 13, assistant on projects 5, need-to-know through every route 17), frontend 40, installer 28
 
 ## V0.4.1 — Installer ready for a real server
 
