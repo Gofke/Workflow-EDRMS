@@ -1,5 +1,18 @@
 # Changelog
 
+## V0.5.1 — Fixes from the first test round
+
+- Assistant answers within seconds: Gemini is asked to think briefly (a small thinking budget, `AI_THINKING_BUDGET`, default 512; a model that refuses the setting is asked again without it), and calls get 45 s, a question 110 s
+- No more "The language model did not answer in time. The built-in assistant answered instead." line: the person simply gets an answer; the reason stays in the usage and audit log
+- The built-in assistant answers project questions with the same need-to-know as the screens: projects behind schedule, business cases waiting for approval, one project by number or name, an overview; a confidential project is "not found" for whoever is not on it
+- The built-in assistant refuses figures about a department outside the person's line ("Hoeveel zaken heeft Financiële Zaken?") and counts the open matters of a department inside it
+- Every unclear question gets suggestions to choose from, now including projects
+- A question in English gets English even after Dutch earlier in the chat or from a Dutch screen
+- A new matter takes its first deadline from the file plan category's handling time (working days)
+- The public seal check accepts the letter's registration number as well as the seal number
+- Installer: reading scans (OCR) is switched on, in Dutch and English, when tesseract is installed; the prerequisite line installs it
+- Tests: backend 430, frontend 40, installer 28
+
 ## V0.5.0 — Projects, from business case to handover
 
 - **Projecten**: each project has an owner (opdrachtgever), a project manager (projectleider), stakeholders and team members; number `PRJ-yyyy-nnn`; classification internal or confidential

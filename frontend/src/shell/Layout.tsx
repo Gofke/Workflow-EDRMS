@@ -149,7 +149,7 @@ export function Layout({ children }: { children: ReactNode }) {
               ))}
           </nav>
           <div className="rail-foot">
-            {t('Versie', 'Version')} 0.5.0
+            {t('Versie', 'Version')} 0.5.1
             <br />
             {branding?.tagline}
           </div>
