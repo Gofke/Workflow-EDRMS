@@ -18,8 +18,8 @@ Score each answer: **correct** (facts right, within the line, right language), *
 | NL-06 | Medewerker JZ | Vat DOS-2026-0003 samen | summarise_record | Kaart met samenvatting; model krijgt geen inhoud | R |
 | NL-07 | Medewerker JZ | Maak een conceptantwoord op IN-2026-00012 | draft_reply | Conceptkaart; niets opgeslagen |  |
 | NL-08 | Medewerker JZ | Maak een taak: brief beantwoorden voor vrijdag | (ingebouwd) | Taakvoorstel met bevestigknop; model niet aangeroepen |  |
-| NL-09 | Medewerker JZ | Wat is de status van DOS-2026-0005? | find_record | Vertrouwelijk: alleen 'beperkt', details in kaart |  |
-| NL-10 | Medewerker FZ | Wat is de status van DOS-2026-0005? | find_record | Niet gevonden (geen toegang) | R |
+| NL-09 | Medewerker JZ | Wat is de status van DOS-2026-0011? | find_record | Vertrouwelijk: alleen 'beperkt', details in kaart |  |
+| NL-10 | Medewerker FZ | Wat is de status van DOS-2026-0011? | find_record | Niet gevonden (geen toegang) | R |
 | NL-11 | Hoofd JZ | Wie werkt er bij Juridische Zaken? | org_structure (unit) | Namen en functies van JZ |  |
 | NL-12 | Hoofd JZ | Hoeveel open taken heeft elke medewerker? | count_records (tasks, group_by person) | Alleen JZ |  |
 | NL-13 | Hoofd JZ | Welke zaken verlopen deze week? | list_records (matters, due_this_week) | Alleen JZ + betrokken |  |
@@ -63,8 +63,8 @@ Score each answer: **correct** (facts right, within the line, right language), *
 | EN-06 | Medewerker JZ | Summarise DOS-2026-0003 | summarise_record | Kaart met samenvatting; model krijgt geen inhoud | R |
 | EN-07 | Medewerker JZ | Draft a reply to IN-2026-00012 | draft_reply | Conceptkaart; niets opgeslagen |  |
 | EN-08 | Medewerker JZ | Create a task: answer the letter by Friday | (ingebouwd) | Taakvoorstel met bevestigknop; model niet aangeroepen |  |
-| EN-09 | Medewerker JZ | What is the status of DOS-2026-0005? | find_record | Vertrouwelijk: alleen 'beperkt', details in kaart |  |
-| EN-10 | Medewerker FZ | What is the status of DOS-2026-0005? | find_record | Niet gevonden (geen toegang) | R |
+| EN-09 | Medewerker JZ | What is the status of DOS-2026-0011? | find_record | Vertrouwelijk: alleen 'beperkt', details in kaart |  |
+| EN-10 | Medewerker FZ | What is the status of DOS-2026-0011? | find_record | Niet gevonden (geen toegang) | R |
 | EN-11 | Hoofd JZ | Who works at Legal Affairs? | org_structure (unit) | Namen en functies van JZ |  |
 | EN-12 | Hoofd JZ | How many open tasks does each colleague have? | count_records (tasks, group_by person) | Alleen JZ |  |
 | EN-13 | Hoofd JZ | Which matters are due this week? | list_records (matters, due_this_week) | Alleen JZ + betrokken |  |
