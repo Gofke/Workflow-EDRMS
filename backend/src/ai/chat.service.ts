@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import { AccessService, isUuid } from '../access/access.service';
 import { MANAGEMENT_ROLES, readableDate, todayInSuriname } from '../common/actor';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { ProjectsService } from '../projects/projects.service';
 import { Actor } from '../records/registration.service';
 import { AiService, BUILTIN_MODEL, Engine } from './ai.service';
 import { looksLikeDataQuestion } from './engine/ask';
@@ -33,8 +34,8 @@ export interface Reply {
 
 const IDENTITY = /\b([A-Z]{2,6}-\d{4}-\d{2,8})\b/i;
 
-const SUGGEST_NL = ['Wat staat er vandaag voor mij klaar?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Hoeveel brieven kwamen deze week binnen?', 'Hoe registreer ik een brief?'];
-const SUGGEST_EN = ['What is waiting for me today?', 'Which matters are at risk of missing their deadline?', 'How many letters came in this week?', 'How do I register a letter?'];
+const SUGGEST_NL = ['Wat staat er vandaag voor mij klaar?', 'Welke zaken lopen risico op termijnoverschrijding?', 'Welke projecten lopen achter?', 'Hoeveel brieven kwamen deze week binnen?', 'Hoe registreer ik een brief?'];
+const SUGGEST_EN = ['What is waiting for me today?', 'Which matters are at risk of missing their deadline?', 'Which projects are behind schedule?', 'How many letters came in this week?', 'How do I register a letter?'];
 
 /**
  * The chatbot on every page. It answers from what the system holds and from
@@ -74,6 +75,7 @@ export class ChatService {
     private readonly ai: AiService,
     private readonly access: AccessService,
     private readonly dashboard: DashboardService,
+    private readonly projects: ProjectsService,
   ) {}
 
   async send(actor: Actor, input: { conversationId?: string; message: string; language?: 'nl' | 'en'; context?: ChatContext | null }) {
@@ -271,6 +273,11 @@ export class ChatService {
       };
     }
 
+    const project = await this.projectReply(actor, message, language);
+    if (project) return project;
+    const unit = await this.unitReply(actor, message, language);
+    if (unit) return unit;
+
     if (/(vat .*samen|samenvatting|samenvatten|waar gaat .*over|wat is de stand|hoe staat .* ervoor|summar|what is (this|it) about|status of this|where does .* stand)/.test(t)) {
       if (!target) {
         return { intent: 'need-context', content: en ? 'Open the matter or letter you want summarised, or mention its number (for example DOS-2026-0001).' : 'Open de zaak of brief die u samengevat wilt hebben, of noem het nummer (bijvoorbeeld DOS-2026-0001).', cards: [], suggestions: [] };
@@ -353,6 +360,137 @@ export class ChatService {
         : 'Ik weet niet zeker of ik u goed begrijp. Ik kan vragen beantwoorden over uw werk, brieven, zaken en taken, een stuk samenvatten, een antwoord opstellen en uitleggen hoe het systeem werkt. Probeer bijvoorbeeld:',
       cards: help.length ? [{ kind: 'HELP', title: en ? 'Perhaps you mean' : 'Bedoelt u misschien', articles: help.map((h) => ({ id: h.article.id, title: h.article[language].title, link: h.article.link })) }] : [],
       suggestions,
+    };
+  }
+
+  /**
+   * Questions about projects, answered on the server with the same need-to-know
+   * as the project screens (ProjectsService): late projects, business cases
+   * waiting for the person, one project by number or name, or an overview.
+   */
+  private async projectReply(actor: Actor, message: string, language: 'nl' | 'en'): Promise<Reply | null> {
+    const t = normalise(message);
+    const ref = /\bprj-\d{4}-\d{3}\b/i.exec(message)?.[0]?.toUpperCase();
+    if (!ref && !/(project|business ?case|opdrachtgever|projectleider|mijlpaal|milestone|gantt)/.test(t)) return null;
+    const en = language === 'en';
+    const STATUS: Record<string, [string, string]> = { PROPOSED: ['business case', 'business case'], ACTIVE: ['loopt', 'running'], ON_HOLD: ['gepauzeerd', 'on hold'], COMPLETED: ['afgerond', 'completed'], CANCELLED: ['stopgezet', 'cancelled'] };
+    const BC: Record<string, [string, string]> = { DRAFT: ['in voorbereiding', 'being written'], SUBMITTED: ['wacht op goedkeuring', 'awaiting approval'], APPROVED: ['goedgekeurd', 'approved'], RETURNED: ['teruggestuurd', 'returned'] };
+    const st = (s: string) => (STATUS[s] ?? [s, s])[en ? 1 : 0];
+    const all = (await this.projects.list(actor.accountId, { scope: 'all' })).data;
+    const row = (p: (typeof all)[number]) => ({
+      type: 'PROJECT',
+      id: p.id,
+      identity: p.reference,
+      title: p.name,
+      meta: [st(p.status), p.phase ? `${en ? 'phase' : 'fase'} ${p.phase.position}/${p.phase.count}` : null, `${p.progress}%`, p.late ? (en ? 'behind schedule' : 'loopt achter') : null, p.ticketCounts.overdue ? `${p.ticketCounts.overdue} ${en ? 'overdue' : 'te laat'}` : null].filter(Boolean).join(' · '),
+      date: null,
+      link: `/projecten/${p.id}`,
+    });
+    const list = (rows: typeof all, title: string): Card[] => [{ kind: 'LIST', title, rows: rows.slice(0, 12).map(row), count: rows.length, link: '/projecten' } as unknown as Card];
+    const suggestions = en ? ['Which projects are behind schedule?', 'Which business cases await my approval?', 'Which projects am I on?'] : ['Welke projecten lopen achter?', 'Welke business cases wachten op mijn goedkeuring?', 'Op welke projecten sta ik?'];
+
+    // One project, by number or by a word of its name.
+    const words = t.split(/[^a-z0-9]+/).filter((w) => w.length >= 5 && !/^(project|projecten|projects|ervoor|status|staat|hoeveel|welke|which|doing)$/.test(w));
+    const named = ref
+      ? all.filter((p) => p.reference === ref)
+      : all.filter((p) => words.some((w) => normalise(p.name).split(/[^a-z0-9]+/).some((n) => n.length >= 5 && (n.startsWith(w) || w.startsWith(n)))));
+    const askingOne = !!ref || (words.length > 0 && /(hoe staat|status|stand|how is|how's|where does|doing|ervoor)/.test(t));
+    if (askingOne) {
+      if (named.length !== 1) {
+        if (named.length > 1) return { intent: 'project', content: en ? `Several projects match. Which one do you mean?` : `Er zijn meerdere projecten die daarop lijken. Welke bedoelt u?`, cards: list(named, en ? 'Projects' : 'Projecten'), suggestions: [] };
+        return { intent: 'not-found', content: en ? 'I could not find that project, or you do not have access to it.' : 'Dat project kon ik niet vinden, of u hebt er geen toegang toe.', cards: [], suggestions };
+      }
+      const p = named[0];
+      const d = await this.projects.detail(actor.accountId, p.id);
+      const mine = d.tickets.filter((x) => x.overdue);
+      const own = d.ticketsShown === 'all';
+      const lines = [
+        `**${p.reference} ${p.name}**: ${st(p.status)}${p.phase ? `, ${en ? 'phase' : 'fase'} ${p.phase.position} ${en ? 'of' : 'van'} ${p.phase.count} (${p.phase.name})` : ''}, ${p.progress}% ${en ? 'done' : 'gereed'}${p.late ? (en ? ', **behind schedule**' : ', **loopt achter op schema**') : ''}.`,
+        `${en ? 'Owner' : 'Opdrachtgever'}: ${p.owner.name}. ${en ? 'Project manager' : 'Projectleider'}: ${p.manager.name}. ${en ? 'Business case' : 'Business case'}: ${(BC[p.businessCaseStatus] ?? [p.businessCaseStatus, p.businessCaseStatus])[en ? 1 : 0]}.`,
+        d.access === 'SUMMARY'
+          ? en ? `You see a summary: ${p.ticketCounts.open} open tickets, ${p.ticketCounts.overdue} overdue.` : `U ziet een samenvatting: ${p.ticketCounts.open} open tickets, ${p.ticketCounts.overdue} te laat.`
+          : own
+            ? en ? `All tickets: ${p.ticketCounts.open} open, ${p.ticketCounts.overdue} overdue${mine.length ? ` (${mine.slice(0, 5).map((x) => `${x.reference}, ${x.assignee.name}`).join('; ')})` : ''}.` : `Alle tickets: ${p.ticketCounts.open} open, ${p.ticketCounts.overdue} te laat${mine.length ? ` (${mine.slice(0, 5).map((x) => `${x.reference}, ${x.assignee.name}`).join('; ')})` : ''}.`
+            : en ? `You see only your own tickets: ${d.tickets.length}${mine.length ? `, overdue: ${mine.map((x) => x.reference).join(', ')}` : ''}.` : `U ziet alleen uw eigen tickets: ${d.tickets.length}${mine.length ? `, te laat: ${mine.map((x) => x.reference).join(', ')}` : ''}.`,
+      ];
+      return { intent: 'project', content: lines.join('\n'), cards: list([p], en ? 'Project' : 'Project'), suggestions: [] };
+    }
+    if (/(achter|te laat|vertraag|behind|late|overdue|delayed)/.test(t)) {
+      const late = all.filter((p) => ['PROPOSED', 'ACTIVE'].includes(p.status) && (p.late || p.ticketCounts.overdue > 0));
+      const behind = late.filter((p) => p.late);
+      const content = late.length
+        ? en
+          ? `${late.length} project${late.length === 1 ? ' is' : 's are'} behind schedule or ${late.length === 1 ? 'has' : 'have'} overdue tickets${behind.length ? `; behind schedule: ${behind.map((p) => p.reference).join(', ')}` : ''}.`
+          : `${late.length} ${late.length === 1 ? 'project loopt' : 'projecten lopen'} achter of ${late.length === 1 ? 'heeft' : 'hebben'} tickets over hun termijn${behind.length ? `; achter op schema: ${behind.map((p) => p.reference).join(', ')}` : ''}.`
+        : en ? 'No project you may see is behind schedule.' : 'Geen enkel project dat u mag zien loopt achter.';
+      return { intent: 'project', content, cards: late.length ? list(late, en ? 'Projects behind schedule' : 'Projecten die achterlopen') : [], suggestions: [] };
+    }
+    if (/(business ?case|goedkeur|approv|beslis|decision)/.test(t)) {
+      const waiting = all.filter((p) => p.myRole === 'OWNER' && p.businessCaseStatus === 'SUBMITTED' && p.status === 'PROPOSED');
+      return {
+        intent: 'project',
+        content: waiting.length
+          ? en ? `${waiting.length} business case${waiting.length === 1 ? ' awaits' : 's await'} your approval. Open the project and choose the Business case tab.` : `${waiting.length} business ${waiting.length === 1 ? 'case wacht' : 'cases wachten'} op uw goedkeuring. Open het project en kies het tabblad Business case.`
+          : en ? 'No business case is waiting for your approval.' : 'Er wacht geen business case op uw goedkeuring.',
+        cards: waiting.length ? list(waiting, en ? 'Awaiting your approval' : 'Wacht op uw goedkeuring') : [],
+        suggestions: [],
+      };
+    }
+    const scoped = /(mijn|ik sta|my|i am on|am i)/.test(t) ? all.filter((p) => p.myRole) : all;
+    const running = scoped.filter((p) => ['PROPOSED', 'ACTIVE'].includes(p.status));
+    return {
+      intent: 'project',
+      content: scoped.length
+        ? en
+          ? `You may see ${scoped.length} project${scoped.length === 1 ? '' : 's'}: ${running.length} running, ${scoped.filter((p) => p.late).length} behind schedule, ${scoped.filter((p) => p.status === 'COMPLETED').length} completed.`
+          : `U mag ${scoped.length} ${scoped.length === 1 ? 'project' : 'projecten'} zien: ${running.length} lopend, ${scoped.filter((p) => p.late).length} achter op schema, ${scoped.filter((p) => p.status === 'COMPLETED').length} afgerond.`
+        : en ? 'You are not on any project, and none falls under your line.' : 'U staat op geen enkel project, en er valt er geen onder uw lijn.',
+      cards: scoped.length ? list(scoped, en ? 'Projects' : 'Projecten') : [],
+      suggestions,
+    };
+  }
+
+  /**
+   * "How many matters does <department> have?": only within the person's line.
+   * Outside it the answer is a refusal, never a number.
+   */
+  private async unitReply(actor: Actor, message: string, language: 'nl' | 'en'): Promise<Reply | null> {
+    const t = normalise(message);
+    if (!/(zaken|dossiers|matters|cases|hoeveel|how many|open)/.test(t)) return null;
+    const units: { id: string; name: string; code: string }[] = await this.dataSource.query(`SELECT id, name, code FROM organisational_unit WHERE is_active`);
+    const hit = units
+      .filter((u) => (normalise(u.name).length >= 6 && t.includes(normalise(u.name))) || new RegExp(`\\b${u.code.replace(/[^A-Za-z0-9-]/g, '')}\\b`).test(message))
+      .sort((a, b) => b.name.length - a.name.length)[0];
+    if (!hit) return null;
+    const en = language === 'en';
+    const profile = await this.access.profile(actor.accountId);
+    const line = await this.access.lineScope(profile);
+    if (!line.all && !line.unitIds.includes(hit.id)) {
+      return {
+        intent: 'refused',
+        content: en
+          ? `${hit.name} is outside your line, so I give no figures about it. You can ask the head of that department.`
+          : `${hit.name} valt buiten uw lijn, dus daarover geef ik geen cijfers. U kunt het navragen bij de leiding van die afdeling.`,
+        cards: [],
+        suggestions: [],
+      };
+    }
+    const visible = await this.access.visibleDossierIds(profile);
+    const rows: { id: string; dossier_identity: string; subject: string; due_date: string | null }[] = await this.dataSource.query(
+      `WITH RECURSIVE tree AS (SELECT id FROM organisational_unit WHERE id = $1 UNION ALL SELECT u.id FROM organisational_unit u JOIN tree ON u.parent_unit_id = tree.id)
+       SELECT d.id, d.dossier_identity, d.subject, to_char(d.due_date, 'YYYY-MM-DD') AS due_date FROM dossier d
+        WHERE d.owning_unit_id IN (SELECT id FROM tree) AND d.state <> 'CLOSED' AND d.processing_state <> 'FINALISED'
+        ORDER BY d.due_date NULLS LAST`,
+      [hit.id],
+    );
+    const open = rows.filter((r) => visible.has(r.id));
+    return {
+      intent: 'ask',
+      content: en ? `${hit.name} has **${open.length}** open matter${open.length === 1 ? '' : 's'} that you may see.` : `${hit.name} heeft **${open.length}** open ${open.length === 1 ? 'zaak' : 'zaken'} die u mag zien.`,
+      cards: open.length
+        ? [{ kind: 'LIST', title: hit.name, rows: open.slice(0, 12).map((r) => ({ type: 'DOSSIER', id: r.id, identity: r.dossier_identity, title: r.subject, meta: en ? 'due' : 'termijn', date: r.due_date, link: `/zaken/${r.id}` })), count: open.length } as unknown as Card]
+        : [],
+      suggestions: [],
     };
   }
 
