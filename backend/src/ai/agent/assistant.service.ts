@@ -23,7 +23,7 @@ import { ProjectsService } from '../../projects/projects.service';
 import { BUILD_VERSION } from '../../version';
 import { AiService, BUILTIN_MODEL } from '../ai.service';
 import { Card, ChatContext, ChatService } from '../chat.service';
-import { detectLanguage } from '../engine/text';
+import { detectLanguage, detectLanguageOr } from '../engine/text';
 import { AgentConfig, agentConfig, createModel, needsKey } from './config';
 import { AgentError, AgentReason, MESSAGE, RECOVERABLE } from './errors';
 import { runLoop } from './loop';
@@ -195,7 +195,7 @@ export class AssistantService {
     const started = Date.now();
     const ai = await this.settings.get('ai');
     // The answer follows the language of the question; the screen language decides only for very short questions.
-    const language: 'nl' | 'en' = input.question.split(/\s+/).length >= 3 ? detectLanguage(input.question) : input.lang ?? 'nl';
+    const language: 'nl' | 'en' = detectLanguageOr(input.question, input.lang ?? 'nl');
     if (!ai.features.assistant) {
       await this.log(actor, 'failed', 'switched-off', null, [], null, started, null);
       throw new AgentError('switched-off');
@@ -316,9 +316,15 @@ export class AssistantService {
     };
   }
 
-  private noticeFor(reason: AgentReason, lang: 'nl' | 'en'): string {
-    const why = MESSAGE[reason][lang];
-    return lang === 'en' ? `${why} The built-in assistant answered instead.` : `${why} De ingebouwde assistent heeft geantwoord.`;
+  /**
+   * No notice in the answer when the built-in assistant takes over: the person
+   * simply gets an answer (the badge under it says which engine gave it). Why the
+   * model did not answer is in the usage log and the audit log for the administrator.
+   */
+  private noticeFor(reason: AgentReason, lang: 'nl' | 'en'): null {
+    void reason;
+    void lang;
+    return null;
   }
 
   private async offline(actor: Actor, question: string, language: 'nl' | 'en', ctx: ChatContext | null) {

@@ -169,6 +169,18 @@ export function detectLanguage(text: string): 'nl' | 'en' {
   return en > nl * 1.2 ? 'en' : 'nl';
 }
 
+/** The language of a question, or the fallback when the words do not tell. */
+export function detectLanguageOr(text: string, fallback: 'nl' | 'en'): 'nl' | 'en' {
+  let nl = 0;
+  let en = 0;
+  for (const t of tokens(text, true).slice(0, 600)) {
+    if (STOP_NL.has(t)) nl += 1;
+    if (STOP_EN.has(t)) en += 1;
+  }
+  if (en === nl) return fallback;
+  return en > nl ? 'en' : 'nl';
+}
+
 export function excerpt(text: string, max = 240): string {
   const t = (text ?? '').replace(/\s+/g, ' ').trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;

@@ -79,7 +79,7 @@ COUNTS
 - Dates are in Suriname time (America/Paramaribo). Write dates as dd-mm-yyyy. "Werkdagen" exclude weekends and public holidays.
 
 LANGUAGE
-- Answer in the language of the question: Dutch (Nederlands) or English. Default: ${en ? 'English' : 'Dutch'}.
+- Answer in ${en ? 'English' : 'Dutch (Nederlands)'}: that is the language of this question. Do so even when earlier turns or tool results are in the other language; translate labels from tool results.
 - Be brief and concrete. Use short paragraphs or a short list. Markdown is allowed (bold, lists, tables); no HTML.
 
 PRIVACY

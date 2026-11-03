@@ -570,7 +570,7 @@ describe('V0.4.0 assistant (Gemini, roles and line of command)', () => {
       const m = new ScriptModel(() => ({ text: 'ok' }));
       AssistantService.modelFactory = () => m;
       await ask(as.minister, 'Which matters are at risk of missing their deadline?', { lang: 'nl' });
-      expect(m.requests[0].system).toMatch(/Default: English/);
+      expect(m.requests[0].system).toMatch(/Answer in English: that is the language of this question/);
       await settingsAi({ scope: 'work' });
       try {
         await ask(as.minister, 'Geef me een recept voor pom');
@@ -652,13 +652,13 @@ describe('V0.4.0 assistant (Gemini, roles and line of command)', () => {
       }
     });
 
-    it('without a key the built-in assistant answers with a notice; or 503 no-key when fallback is off', async () => {
+    it('without a key the built-in assistant answers (no notice line in the answer); or 503 no-key when fallback is off', async () => {
       const saved = process.env.AI_API_KEY;
       delete process.env.AI_API_KEY;
       try {
         const res = await ask(as.jzStaff, 'Hoe registreer ik een brief?');
         expect(res.status).toBe(200);
-        expect(res.body.data.notice).toMatch(/geen sleutel/i);
+        expect(res.body.data.notice).toBeNull();
         await settingsAi({ offlineFallback: false });
         const strict = await ask(as.jzStaff, 'Hoe registreer ik een brief?');
         expect(strict.status).toBe(503);
@@ -766,12 +766,12 @@ describe('V0.4.0 assistant (Gemini, roles and line of command)', () => {
       expect(received.map((r) => r.url)).toEqual(['/v1beta/models/gemini-flash-latest:generateContent', '/v1beta/models/gemini-flash-lite-latest:generateContent']);
     });
 
-    it('both models over the limit: the built-in assistant answers with a notice, and that is audited', async () => {
+    it('both models over the limit: the built-in assistant answers (no notice line), and that is audited', async () => {
       handler = () => ({ status: 429, body: { error: { status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded' } } });
       const res = await ask(as.jzStaff, 'Hoe registreer ik een brief?');
       expect(res.status).toBe(200);
       expect(res.body.data.engine.offline).toBe(true);
-      expect(res.body.data.notice).toMatch(/gratis limiet/);
+      expect(res.body.data.notice).toBeNull();
       const [ev] = await h.db.query(`SELECT summary FROM audit_event WHERE event_type = 'AI_QUESTION_ANSWERED' ORDER BY occurred_at DESC LIMIT 1`);
       expect(ev.summary).toMatch(/answered offline by the built-in assistant \(free-limit\)/);
     });

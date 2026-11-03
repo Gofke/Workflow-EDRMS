@@ -106,8 +106,8 @@ export function agentConfig(ai: Settings['ai'], env: NodeJS.ProcessEnv = process
     local: provider !== 'builtin' && provider !== 'gemini' && isLocalAddress(baseUrl),
     keyPresent: Boolean(set(env, 'AI_API_KEY')),
     maxOutputTokens: num(env, 'AI_MAX_OUTPUT_TOKENS', 1024, 64, 8192),
-    callTimeoutMs: num(env, 'AI_CALL_TIMEOUT_MS', 30_000, 1_000, 120_000),
-    totalTimeoutMs: num(env, 'AI_TOTAL_TIMEOUT_MS', 80_000, 2_000, 300_000),
+    callTimeoutMs: num(env, 'AI_CALL_TIMEOUT_MS', 45_000, 1_000, 120_000),
+    totalTimeoutMs: num(env, 'AI_TOTAL_TIMEOUT_MS', 110_000, 2_000, 300_000),
     hourlyLimit: hourly,
     maxRounds: 6,
     // A free model outside the ministry network gets metadata only, whatever the setting says.

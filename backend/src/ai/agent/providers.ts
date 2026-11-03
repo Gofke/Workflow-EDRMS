@@ -90,7 +90,11 @@ function geminiSchema(s: Schema): Record<string, unknown> {
   return out;
 }
 
+/** The thinking budget sent to Gemini (AI_THINKING_BUDGET; -1 = the model decides). */
+const THINKING_BUDGET = Number.isFinite(Number(process.env.AI_THINKING_BUDGET)) && process.env.AI_THINKING_BUDGET !== undefined && process.env.AI_THINKING_BUDGET !== '' ? Number(process.env.AI_THINKING_BUDGET) : 512;
+
 export class GeminiModel implements ChatModel {
+  private thinking = true;
   readonly provider = 'gemini';
 
   constructor(
@@ -120,14 +124,26 @@ export class GeminiModel implements ChatModel {
     const payload: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: r.system }] },
       contents: this.contents(r.entries),
-      generationConfig: { maxOutputTokens: r.maxOutputTokens, temperature: r.temperature },
+      generationConfig: {
+        maxOutputTokens: r.maxOutputTokens,
+        temperature: r.temperature,
+        // A small thinking budget: answers in seconds instead of timing out. Set
+        // AI_THINKING_BUDGET=-1 to leave it to the model.
+        ...(THINKING_BUDGET >= 0 && this.thinking ? { thinkingConfig: { thinkingBudget: THINKING_BUDGET } } : {}),
+      },
     };
     if (r.tools.length) {
       payload.tools = [{ functionDeclarations: r.tools.map((t) => ({ name: t.name, description: t.description, parameters: geminiSchema(t.parameters) })) }];
       payload.toolConfig = { functionCallingConfig: { mode: r.allowTools ? 'AUTO' : 'NONE' } };
     }
     const url = `${this.base.replace(/\/+$/, '')}/models/${encodeURIComponent(r.model)}:generateContent`;
-    const reply = await postJson(url, { 'x-goog-api-key': this.key }, payload, r.signal);
+    let reply = await postJson(url, { 'x-goog-api-key': this.key }, payload, r.signal);
+    if (reply.status === 400 && /thinking/i.test(reply.text ?? '') && (payload.generationConfig as Record<string, unknown>).thinkingConfig) {
+      // This model does not take a thinking budget: send it without, and remember.
+      this.thinking = false;
+      delete (payload.generationConfig as Record<string, unknown>).thinkingConfig;
+      reply = await postJson(url, { 'x-goog-api-key': this.key }, payload, r.signal);
+    }
     if (reply.status < 200 || reply.status >= 300) fail(reply);
 
     const candidate = (reply.body.candidates as { content?: { role?: string; parts?: Record<string, unknown>[] }; finishReason?: string }[] | undefined)?.[0];

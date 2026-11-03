@@ -95,9 +95,9 @@ describe('V0.4.0 assistant — units', () => {
       expect(agentConfig({ ...ai, dataPolicy: 'records' }, { AI_PROVIDER: 'gemini', AI_TIER: 'paid' }).dataPolicy).toBe('records');
     });
 
-    it('defaults: 6 rounds, 30 s per call, 80 s per question, 30 questions per hour', () => {
+    it('defaults: 6 rounds, 45 s per call, 110 s per question, 30 questions per hour', () => {
       const c = agentConfig(ai, {});
-      expect(c).toMatchObject({ maxRounds: 6, callTimeoutMs: 30_000, totalTimeoutMs: 80_000, hourlyLimit: 30, offlineFallback: true });
+      expect(c).toMatchObject({ maxRounds: 6, callTimeoutMs: 45_000, totalTimeoutMs: 110_000, hourlyLimit: 30, offlineFallback: true });
     });
   });
 
