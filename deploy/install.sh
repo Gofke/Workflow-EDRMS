@@ -2,7 +2,7 @@
 # JusPol EDRMS — install or update one environment on an Ubuntu server.
 #
 #   sudo bash install.sh install --env staging --domain edrms-test.juspol.sr \
-#        --port 4611 --release juspol-edrms-0.5.0.tar.gz --email ict@juspol.sr [--no-tls]
+#        --port 4611 --release juspol-edrms-0.5.1.tar.gz --email ict@juspol.sr [--no-tls]
 #   sudo bash install.sh demo    --env staging [--reset]   (demonstration data; never production)
 #   sudo bash install.sh status  --env staging
 #
@@ -207,7 +207,7 @@ for tool in npm nginx curl pg_dump; do command -v "$tool" >/dev/null 2>&1 || mis
 if [[ ${#missing[@]} -gt 0 ]]; then
   die "missing: ${missing[*]}.
 Install them, then run this again:
-  sudo apt-get update && sudo apt-get install -y nginx postgresql certbot python3-certbot-nginx curl
+  sudo apt-get update && sudo apt-get install -y nginx postgresql certbot python3-certbot-nginx curl tesseract-ocr tesseract-ocr-nld tesseract-ocr-eng poppler-utils
   Node.js 22 (if missing or older):
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
 fi
@@ -288,6 +288,17 @@ fi
 # release folder is read-only for the service), and no example secret is kept.
 put_setting "$SETTINGS" DOCUMENT_STORAGE_PATH "$APP_DIR/storage/documents"
 put_setting "$SETTINGS" KEYS_DIR "$APP_DIR/storage/keys"
+# Reading scans (OCR): on when tesseract is installed, in Dutch and English when
+# both languages are there. Without it, scans are stored but not read.
+if command -v tesseract >/dev/null 2>&1; then
+  langs="$(tesseract --list-langs 2>/dev/null | tail -n +2 | tr '\n' ' ')"
+  ocr_langs="eng"; [[ " $langs " == *" nld "* ]] && ocr_langs="nld+eng"
+  put_setting "$SETTINGS" OCR_ENABLED true
+  put_setting "$SETTINGS" OCR_LANGUAGES "$ocr_langs"
+  echo "reading scans: on ($ocr_langs)"
+else
+  echo "reading scans: off — install with: sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-eng poppler-utils"
+fi
 unset_value "$(get_setting "$SETTINGS" SESSION_SECRET)" && put_setting "$SETTINGS" SESSION_SECRET "$(random 64)"
 unset_value "$(get_setting "$SETTINGS" MFA_ENCRYPTION_KEY)" && put_setting "$SETTINGS" MFA_ENCRYPTION_KEY "$(random 64)"
 chmod 640 "$SETTINGS"
