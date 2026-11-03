@@ -10,6 +10,8 @@ import { ResponsibilityAssignment } from './responsibility.entity';
 import { Actor } from './registration.service';
 import { AccessService } from '../access/access.service';
 import { SettingsService } from '../settings/settings.service';
+import { WorkingDaysService } from '../core/working-days.service';
+import { todayInSuriname } from '../common/actor';
 
 export interface DossierView {
   id: string;
@@ -53,6 +55,7 @@ export class DossierService {
     private readonly audit: AuditService,
     private readonly access: AccessService,
     private readonly settings: SettingsService,
+    private readonly workingDays: WorkingDaysService,
   ) {}
 
   async list(accountId?: string): Promise<DossierView[]> {
@@ -81,10 +84,10 @@ export class DossierService {
     if (!subject || subject.trim() === '') {
       throw new BadRequestException('A subject is required.');
     }
-    let category: { id: string; default_classification: string; code: string } | null = null;
+    let category: { id: string; default_classification: string; code: string; handling_working_days: number | null } | null = null;
     if (options.categoryId) {
       [category] = await this.dataSource.query(
-        `SELECT id, default_classification, code FROM dossier_category WHERE id = $1 AND is_active`,
+        `SELECT id, default_classification, code, handling_working_days FROM dossier_category WHERE id = $1 AND is_active`,
         [options.categoryId],
       );
       if (!category) throw new BadRequestException('Unknown or inactive category.');
@@ -98,6 +101,9 @@ export class DossierService {
     const pattern = numbering.dossierPattern ?? this.config.dossierIdentityPattern;
     const padding = numbering.dossierPadding ?? this.config.dossierSequencePadding;
 
+    // The category's handling time gives the first deadline, in working days
+    // (weekends and holidays skipped). A manager can change it later, with a reason.
+    const due = category?.handling_working_days ? await this.workingDays.addWorkingDays(todayInSuriname(), category.handling_working_days) : null;
     const created = await this.dataSource.transaction(async (manager) => {
       const [{ nextval }] = await manager.query(`SELECT nextval('dossier_sequence') AS nextval`);
       const identity = pattern
@@ -106,17 +112,17 @@ export class DossierService {
         .replace('{SEQ}', String(nextval).padStart(padding, '0'));
 
       const [row] = await manager.query(
-        `INSERT INTO dossier (dossier_identity, subject, created_by_account_id, owning_unit_id, classification, category_id)
-         VALUES ($1, $2, $3, (SELECT organisational_unit_id FROM account WHERE id = $3), $4, $5) RETURNING id`,
-        [identity, subject.trim(), actor.accountId, classification, category?.id ?? null],
+        `INSERT INTO dossier (dossier_identity, subject, created_by_account_id, owning_unit_id, classification, category_id, due_date)
+         VALUES ($1, $2, $3, (SELECT organisational_unit_id FROM account WHERE id = $3), $4, $5, $6) RETURNING id`,
+        [identity, subject.trim(), actor.accountId, classification, category?.id ?? null, due],
       );
       await this.audit.recordInTransaction(manager, {
         eventType: AuditEventType.DOSSIER_CREATED,
         actorAccountId: actor.accountId,
         actorDescription: actor.description,
         subjectDescription: `${identity} — ${subject.trim()}`,
-        newValue: identity,
-        summary: `${actor.description} created dossier ${identity}: ${subject.trim()}.`,
+        newValue: due ? `${identity}, deadline ${due} (from the file plan)` : identity,
+        summary: `${actor.description} created dossier ${identity}: ${subject.trim()}${due ? `; deadline ${due} from the file plan category` : ''}.`,
       });
       return { id: row.id as string, identity };
     });

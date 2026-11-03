@@ -399,6 +399,14 @@ export class LettersService {
 
   /** Public: is this seal genuine, and is the sealed document unchanged? */
   async verifyPublic(sealId: string) {
+    // People type the letter's registration number as often as the seal number: accept both.
+    if (!/^[0-9a-f-]{36}$/i.test(sealId)) {
+      const [byNumber] = await this.dataSource.query(
+        `SELECT id FROM document_seal WHERE upper(payload->>'registrationIdentity') = upper($1) ORDER BY sealed_at DESC LIMIT 1`,
+        [sealId.trim().slice(0, 60)],
+      );
+      if (byNumber) sealId = byNumber.id;
+    }
     const result = await this.seals.verifySeal(sealId);
     const [row] = await this.dataSource.query(`SELECT subject_id, subject_type FROM document_seal WHERE id = $1`, [sealId]);
     let documentIntact: boolean | null = null;
