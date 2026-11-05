@@ -207,10 +207,17 @@ describe('Phase 3 foundation', () => {
       const attempt = (password: string) =>
         request(server).post('/api/auth/login').set('User-Agent', 'lockout-test').send({ email: 'assistant2@juspol.test', password });
       const wrong = await attempt('wrong-1');
+      expect(wrong.body.message).toBe('Invalid email or password.');
+      expect(wrong.body.attemptsLeft).toBe(4);
       for (let i = 0; i < 4; i += 1) await attempt(`wrong-${i + 2}`).expect(401);
-      // Locked: even the right password is refused, with the identical message.
+      // Locked: even the right password is refused, with the identical message;
+      // the person is told until when, which says nothing about the account.
       const locked = await attempt(SEED_PASSWORD).expect(401);
-      expect(locked.body).toEqual(wrong.body);
+      expect(locked.body.message).toEqual(wrong.body.message);
+      expect(locked.body.locked).toBe(true);
+      expect(new Date(locked.body.lockedUntil).getTime()).toBeGreaterThan(Date.now());
+      const ghost = await request(server).post('/api/auth/login').send({ email: 'nobody-here@juspol.test', password: 'x' }).expect(401);
+      expect(ghost.body.attemptsLeft).toBe(4);
       await expectAuditEvent(h.db, 'ACCOUNT_LOCKED', 'assistant2@juspol.test');
       const id = await accountIdFor(h.db, 'assistant2@juspol.test');
       const alerts = await h.db.query(`SELECT * FROM notification WHERE account_id = $1 AND kind = 'SECURITY_ALERT'`, [id]);

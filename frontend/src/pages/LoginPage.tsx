@@ -1,13 +1,21 @@
 import { FileCheck2, Search } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { errorText } from '../lib/api';
+import { ApiError, errorText } from '../lib/api';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { ErrorNote, Field, Mark } from '../ui';
+import { DisplayButtons } from '../shell/Layout';
+import { ErrorNote, Field, Mark, Notice } from '../ui';
+
+interface Refusal {
+  locked?: boolean;
+  lockedUntil?: string | null;
+  attemptsLeft?: number;
+  lockoutMinutes?: number;
+}
 
 export function LoginPage() {
-  const { t, language, setLanguage } = usePrefs();
+  const { t, language } = usePrefs();
   const { signIn, verifyMfa, pub } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,12 +23,24 @@ export function LoginPage() {
   const [step, setStep] = useState<'password' | 'code'>('password');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [now, setNow] = useState(Date.now());
   const branding = pub?.branding;
+  const lockedUntil = refusal?.lockedUntil ? new Date(refusal.lockedUntil).getTime() : null;
+  const locked = !!refusal?.locked && lockedUntil !== null && lockedUntil > now;
+  useEffect(() => {
+    if (!locked) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [locked]);
+  const secondsLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - now) / 1000)) : 0;
+  const mmss = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setRefusal(null);
     try {
       if (step === 'password') {
         const r = await signIn(email.trim(), password);
@@ -29,7 +49,14 @@ export function LoginPage() {
         await verifyMfa(code.trim());
       }
     } catch (err) {
-      setError(errorText(err));
+      const body = err instanceof ApiError && err.body && typeof err.body === 'object' ? (err.body as Refusal) : null;
+      if (body && (body.locked || typeof body.attemptsLeft === 'number')) {
+        setRefusal(body);
+        setNow(Date.now());
+        if (!body.locked) setError(errorText(err));
+      } else {
+        setError(errorText(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -52,6 +79,9 @@ export function LoginPage() {
 
   return (
     <div className="auth">
+      <div className="auth-display">
+        <DisplayButtons />
+      </div>
       <section className="auth-art" aria-label={branding?.organisationName}>
         <div>
           <div className="row" style={{ gap: 14 }}>
@@ -83,14 +113,9 @@ export function LoginPage() {
       </section>
       <section className="auth-form">
         <form onSubmit={submit} className="stack" style={{ '--gap': '16px' } as React.CSSProperties} aria-labelledby="signin-title">
-          <div className="row between">
-            <h2 id="signin-title" style={{ fontSize: 'var(--text-xl)' }}>
-              {step === 'password' ? t('Aanmelden', 'Sign in') : t('Tweede stap', 'Second step')}
-            </h2>
-            <button type="button" className="btn sm ghost" onClick={() => setLanguage(language === 'nl' ? 'en' : 'nl')}>
-              {language === 'nl' ? 'English' : 'Nederlands'}
-            </button>
-          </div>
+          <h2 id="signin-title" style={{ fontSize: 'var(--text-xl)' }}>
+            {step === 'password' ? t('Aanmelden', 'Sign in') : t('Tweede stap', 'Second step')}
+          </h2>
           {step === 'password' ? (
             <>
               <Field label={t('E-mailadres', 'E-mail address')}>
@@ -106,14 +131,27 @@ export function LoginPage() {
             </Field>
           )}
           <ErrorNote error={error} />
-          <button type="submit" className="btn primary" disabled={busy}>
+          {locked && (
+            <Notice tone="danger">
+              {t(`Dit e-mailadres is tijdelijk geblokkeerd na te veel verkeerde pogingen. Probeer het over ${mmss} opnieuw.`, `This e-mail address is temporarily locked after too many wrong attempts. Try again in ${mmss}.`)}
+            </Notice>
+          )}
+          {!locked && refusal && typeof refusal.attemptsLeft === 'number' && (
+            <Notice tone="warn">
+              {t(
+                `Nog ${refusal.attemptsLeft} ${refusal.attemptsLeft === 1 ? 'poging' : 'pogingen'} voordat dit adres ${refusal.lockoutMinutes ?? 15} minuten wordt geblokkeerd.`,
+                `${refusal.attemptsLeft} ${refusal.attemptsLeft === 1 ? 'attempt' : 'attempts'} left before this address is locked for ${refusal.lockoutMinutes ?? 15} minutes.`,
+              )}
+            </Notice>
+          )}
+          <button type="submit" className="btn primary" disabled={busy || locked}>
             {busy ? t('Bezig…', 'Working…') : step === 'password' ? t('Aanmelden', 'Sign in') : t('Bevestigen', 'Confirm')}
           </button>
           <p className="small muted">
-            {t('Na vijf verkeerde pogingen wordt het account een kwartier geblokkeerd. Elke aanmelding wordt vastgelegd.', 'After five wrong attempts the account is locked for fifteen minutes. Every sign-in is recorded.')}
+            {t('Elke aanmelding wordt vastgelegd.', 'Every sign-in is recorded.')}
           </p>
           <hr style={{ border: 'none', borderTop: '1px solid var(--line)', width: '100%' }} />
-          <div className="stack" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 18, flexWrap: 'wrap' }}>
             {pub?.publicTracking.enabled !== false && (
               <Link to="/volgen" className="row small" style={{ gap: 8 }}>
                 <Search size={16} /> {t('Status van uw brief volgen', 'Track the status of your letter')}

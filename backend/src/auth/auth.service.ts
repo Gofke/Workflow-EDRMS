@@ -51,7 +51,9 @@ export class AuthService {
     });
     if (await this.isLocked(normalised, security)) {
       await this.recordAttempt(normalised, account?.id ?? null, false, 'locked', context);
-      throw new UnauthorizedException(GENERIC_FAILURE);
+      // The lock is per address tried, so saying until when reveals nothing about
+      // whether the account exists; it only tells the person when to try again.
+      throw new UnauthorizedException({ message: GENERIC_FAILURE, locked: true, lockedUntil: await this.lockedUntil(normalised, security), attemptsLeft: 0 });
     }
     // Verify against a dummy hash when the account is absent so that a missing
     // email does not answer measurably faster than a wrong password.
@@ -77,7 +79,15 @@ export class AuthService {
       });
       await this.recordAttempt(normalised, account?.id ?? null, false, reason, context);
       await this.lockIfThresholdReached(normalised, account?.id ?? null, security);
-      throw new UnauthorizedException(GENERIC_FAILURE);
+      const { count } = await this.failuresSinceLastSuccess(normalised, security.lockoutWindowMinutes);
+      const attemptsLeft = Math.max(security.lockoutThreshold - count, 0);
+      throw new UnauthorizedException({
+        message: GENERIC_FAILURE,
+        locked: attemptsLeft === 0,
+        attemptsLeft,
+        lockoutMinutes: security.lockoutMinutes,
+        ...(attemptsLeft === 0 ? { lockedUntil: await this.lockedUntil(normalised, security) } : {}),
+      });
     }
     const mfa = await this.dataSource.query(
       `SELECT enabled_at FROM account_mfa WHERE account_id = $1 AND enabled_at IS NOT NULL`,
@@ -141,6 +151,12 @@ export class AuthService {
       [email, windowMinutes],
     );
     return { count: row.count, last: row.last };
+  }
+
+  /** When the lock on an address ends: the last failure plus the lockout time. */
+  private async lockedUntil(email: string, security: { lockoutWindowMinutes: number; lockoutMinutes: number }): Promise<string | null> {
+    const { last } = await this.failuresSinceLastSuccess(email, Math.max(security.lockoutWindowMinutes, security.lockoutMinutes));
+    return last ? new Date(new Date(last).getTime() + security.lockoutMinutes * 60_000).toISOString() : null;
   }
 
   private async isLocked(email: string, security: { lockoutThreshold: number; lockoutWindowMinutes: number; lockoutMinutes: number }): Promise<boolean> {
