@@ -1,4 +1,4 @@
-# JusPol EDRMS — V0.5.1
+# JusPol EDRMS — V0.5.2
 
 Records, case and task management for the Ministry of Justice and Police,
 Suriname. Phase 3 merges the two earlier panels into one system:
@@ -187,9 +187,9 @@ npm run build               # output in frontend/dist
 sudo apt-get update && sudo apt-get install -y nginx postgresql certbot python3-certbot-nginx curl poppler-utils imagemagick
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs   # if Node.js < 20
 
-tar -xzf juspol-edrms-0.5.1.tar.gz ./deploy/install.sh
+tar -xzf juspol-edrms-0.5.2.tar.gz ./deploy/install.sh
 sudo bash deploy/install.sh install --env staging --domain <name pointing at the server> \
-     --port 4611 --release juspol-edrms-0.5.1.tar.gz --email <e-mail for the certificate>
+     --port 4611 --release juspol-edrms-0.5.2.tar.gz --email <e-mail for the certificate>
 sudo bash deploy/install.sh demo --env staging     # demonstration accounts; asks for their password
 ```
 
@@ -198,7 +198,7 @@ while the certificate cannot be obtained yet; production only signs in over
 HTTPS.
 
 Check `https://<server>/api/health`:
-`{"status":"ok","version":"0.5.1","database":"reachable"}` and
+`{"status":"ok","version":"0.5.2","database":"reachable"}` and
 `https://<server>/api/v1/health` (environment, version, assistant state).
 
 ## Demonstration data

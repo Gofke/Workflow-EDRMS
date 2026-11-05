@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.5.2 — Interface polish for the presentation
+
+- Menu on the left can be collapsed to icons (button at the bottom; remembered per browser); the mark and the icons are centred; the menu never scrolls
+- Language and theme are one click each on the top bar, on every page and on the sign-in page; the name at the top right shows an arrow for its menu (profile, tour, text size, sign out)
+- Sign-in page fits the screen without scrolling; after a wrong password it says how many attempts are left, and when the address is locked it shows a countdown until it opens again (the refusal itself stays the same for every reason)
+- Every list is paged (25 per page, adjustable; no endless lists): mail, matters, tasks, projects, review, search, archive, notifications, people; tables wrap instead of scrolling sideways
+- Tests: backend 430, frontend 40, installer 28
+
 ## V0.5.1 — Fixes from the first test round
 
 - Assistant answers within seconds: Gemini is asked to think briefly (a small thinking budget, `AI_THINKING_BUDGET`, default 512; a model that refuses the setting is asked again without it), and calls get 45 s, a question 110 s
