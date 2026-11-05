@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { ago } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
-import { Due, Empty, PageHead, Panel, Stamp } from '../ui';
+import { Due, Empty, PageHead, Panel, Stamp, usePager } from '../ui';
 import { TaskRow, TaskView } from '../ui/records';
 
 export default function ReviewPage() {
   const { t, language } = usePrefs();
   const queue = useApi<{ dossierId: string; dossierIdentity: string; subject: string; submittedByName: string; submittedAt: string }[]>('/api/dossiers/review-queue');
+  const { page: queueRows, pager } = usePager(queue.data ?? []);
   const advice = useApi<{ id: string; question: string; dueDate: string | null; dossierId: string; dossierIdentity: string; subject: string; requestedByName: string }[]>('/api/advice/mine');
   const checks = useApi<{ data: TaskView[] }>('/api/tasks?scope=owner&status=IN_REVIEW&limit=50');
   const standing = useApi<{ id: string; absentName: string; startsOn: string; endsOn: string; message: string | null }[]>('/api/out-of-office/standing-in');
@@ -27,7 +28,7 @@ export default function ReviewPage() {
             <Empty title={t('Niets te beslissen', 'Nothing to decide')}>{t('Zaken die u ter beoordeling krijgen, verschijnen hier.', 'Matters submitted to you appear here.')}</Empty>
           ) : (
             <ul className="list">
-              {queue.data!.map((r) => (
+              {queueRows.map((r) => (
                 <li key={r.dossierId}>
                   <Link to={`/zaken/${r.dossierId}?tab=besluit`} className="list-link">
                     <Gavel size={18} style={{ marginTop: 3, color: 'var(--warn)', flex: 'none' }} aria-hidden="true" />
@@ -46,6 +47,7 @@ export default function ReviewPage() {
               ))}
             </ul>
           )}
+          {pager}
         </Panel>
         <div className="grid-2">
           <Panel title={t('Om uw advies gevraagd', 'Your advice requested')} flush>

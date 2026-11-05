@@ -7,7 +7,7 @@ import { useAction, useApi } from '../lib/hooks';
 import { TASK_STATUS } from '../lib/labels';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Avatar, Confirm, Due, Empty, ErrorNote, Field, Loading, PageHead, Panel, PriorityBadge, Segmented, useToast } from '../ui';
+import { Avatar, Confirm, Due, Empty, ErrorNote, Field, Loading, PageHead, Panel, PriorityBadge, Segmented, usePager, useToast } from '../ui';
 import { PersonSelect } from '../ui/people';
 import { TaskRow, TaskView } from '../ui/records';
 import { NewTaskDialog } from '../ui/tasks';
@@ -127,6 +127,7 @@ function ListView({ tasks, canBulk, onChanged }: { tasks: TaskView[]; canBulk: b
   const [who, setWho] = useState('');
   const { busy, error, run } = useAction();
   const sorted = [...tasks].sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+  const { page: pageRows, pager } = usePager(sorted);
   if (sorted.length === 0)
     return (
       <Panel>
@@ -144,7 +145,7 @@ function ListView({ tasks, canBulk, onChanged }: { tasks: TaskView[]; canBulk: b
         </div>
       )}
       <ul className="list">
-        {sorted.map((task) => (
+        {pageRows.map((task) => (
           <li key={task.id} className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
             {canBulk && (
               <input
@@ -166,6 +167,7 @@ function ListView({ tasks, canBulk, onChanged }: { tasks: TaskView[]; canBulk: b
           </li>
         ))}
       </ul>
+      {pager}
       {assign && (
         <Confirm
           title={t('Taken toewijzen', 'Assign tasks')}

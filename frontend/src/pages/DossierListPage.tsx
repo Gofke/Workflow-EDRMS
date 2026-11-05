@@ -7,7 +7,7 @@ import { useAction, useApi } from '../lib/hooks';
 import { CLASSIFICATION } from '../lib/labels';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Badge, ClassStamp, Confirm, Due, Empty, ErrorNote, Field, Loading, PageHead, Panel, ProcessingBadge, Segmented, Stamp } from '../ui';
+import { Badge, ClassStamp, Confirm, Due, Empty, ErrorNote, Field, Loading, PageHead, Panel, ProcessingBadge, Segmented, Stamp, usePager } from '../ui';
 import { DossierView } from './DossierDetailPage';
 
 interface Category {
@@ -45,6 +45,7 @@ export default function DossierListPage() {
       .filter((d) => !needle || `${d.dossierIdentity} ${d.subject} ${d.responsibleName ?? ''}`.toLowerCase().includes(needle))
       .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
   }, [data, q, view, mine, user]);
+  const { page: pageRows, pager } = usePager(rows);
 
   const set = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
@@ -107,7 +108,7 @@ export default function DossierListPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((d) => (
+                {pageRows.map((d) => (
                   <tr key={d.id} className="clickable" onClick={() => navigate(`/zaken/${d.id}`)}>
                     <td>
                       <Stamp value={d.dossierIdentity} />
@@ -140,6 +141,7 @@ export default function DossierListPage() {
                 ))}
               </tbody>
             </table>
+            {pager}
           </div>
         )}
       </Panel>

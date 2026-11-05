@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { longDate } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
-import { Badge, Empty, Loading, PageHead, Panel, Segmented } from '../ui';
+import { Badge, Empty, Loading, PageHead, Panel, Segmented, usePager } from '../ui';
 
 interface Item { id: string; kind: string; title: string; body: string; link: string | null; createdAt: string; readAt: string | null; forAbsentName: string | null }
 
@@ -33,8 +33,9 @@ export default function NotificationsPage() {
     if (n.link) navigate(n.link);
     else void reload();
   };
+  const { page: pageItems, pager } = usePager(data?.items ?? [], 50);
   const days = new Map<string, Item[]>();
-  for (const n of data?.items ?? []) {
+  for (const n of pageItems) {
     const d = new Date(new Date(n.createdAt).getTime() - 3 * 3600_000).toISOString().slice(0, 10);
     days.set(d, [...(days.get(d) ?? []), n]);
   }
@@ -101,6 +102,7 @@ export default function NotificationsPage() {
               </ul>
             </Panel>
           ))}
+          {pager}
         </div>
       )}
     </>

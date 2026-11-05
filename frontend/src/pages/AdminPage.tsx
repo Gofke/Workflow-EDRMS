@@ -8,7 +8,7 @@ import { AI_FEATURE, CLASSIFICATION, PRIORITY, ROLE } from '../lib/labels';
 import { auditSummaryNl } from '../lib/auditText';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Badge, Confirm, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Tabs, useToast } from '../ui';
+import { Badge, Confirm, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Tabs, usePager, useToast } from '../ui';
 import { forgetPeople, PersonRow, PersonSelect } from '../ui/people';
 
 type Tab = 'medewerkers' | 'afdelingen' | 'instellingen' | 'assistent' | 'feestdagen' | 'sjablonen' | 'koppelingen' | 'berichten' | 'beveiliging';
@@ -75,6 +75,7 @@ function AccountsTab() {
   const [resetting, setResetting] = useState<PersonRow | null>(null);
   const [toggling, setToggling] = useState<PersonRow | null>(null);
   const rows = (data ?? []).filter((p) => !q.trim() || `${p.personName} ${p.email} ${p.unit ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const { page: pageRows, pager } = usePager(rows);
   const changed = () => {
     forgetPeople();
     void reload();
@@ -103,7 +104,7 @@ function AccountsTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => (
+              {pageRows.map((p) => (
                 <tr key={p.accountId} style={p.isEnabled ? undefined : { opacity: 0.65 }}>
                   <td>
                     <strong>{p.personName}</strong>
@@ -148,6 +149,7 @@ function AccountsTab() {
             </tbody>
           </table>
         )}
+        {pager}
       </Panel>
       {editing && <AccountDialog person={editing === 'new' ? null : editing} units={units.data ?? []} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), changed())} />}
       {resetting && <ResetDialog person={resetting} onClose={() => setResetting(null)} />}

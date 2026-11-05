@@ -4,6 +4,9 @@ import {
   Bell,
   BookOpen,
   CheckSquare,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   ClipboardCheck,
   Compass,
   Contrast,
@@ -57,7 +60,22 @@ export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [counts, setCounts] = useState<Counts | null>(null);
   const [railOpen, setRailOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('juspol.rail') === 'collapsed';
+    } catch {
+      return false;
+    }
+  });
   const [tour, setTour] = useState(false);
+  useEffect(() => {
+    document.documentElement.classList.toggle('rail-collapsed', collapsed);
+    try {
+      localStorage.setItem('juspol.rail', collapsed ? 'collapsed' : 'open');
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
 
   const loadCounts = useCallback(async () => {
     if (!business) {
@@ -125,12 +143,11 @@ export function Layout({ children }: { children: ReactNode }) {
         {t('Naar de inhoud', 'Skip to content')}
       </a>
       <div className="shell">
-        <aside className={`rail${railOpen ? ' open' : ''}`} aria-label={t('Hoofdmenu', 'Main menu')}>
-          <Link to="/" className="rail-brand">
-            <Mark />
-            <span>
+        <aside className={`rail${railOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`} aria-label={t('Hoofdmenu', 'Main menu')}>
+          <Link to="/" className="rail-brand" title={branding?.productName ?? 'JusPol'}>
+            <Mark size={collapsed ? 36 : 44} />
+            <span className="rail-brand-text">
               <span className="rail-brand-name">{branding?.productName ?? 'JusPol'}</span>
-              <br />
               <span className="rail-brand-org">{branding?.organisationName ?? ''}</span>
             </span>
           </Link>
@@ -140,18 +157,22 @@ export function Layout({ children }: { children: ReactNode }) {
               .map((n) => (
                 <div key={n.to} style={{ display: 'contents' }}>
                   {n.group && <div className="rail-group">{n.group}</div>}
-                  <NavLink to={n.to} end={n.to === '/'} data-tour={n.tour}>
+                  <NavLink to={n.to} end={n.to === '/'} data-tour={n.tour} title={collapsed ? n.label : undefined} aria-label={collapsed ? n.label : undefined}>
                     {n.icon}
-                    <span>{n.label}</span>
+                    <span className="rail-label">{n.label}</span>
                     {n.count ? <span className="count">{n.count}</span> : null}
                   </NavLink>
                 </div>
               ))}
           </nav>
           <div className="rail-foot">
-            {t('Versie', 'Version')} 0.5.1
-            <br />
-            {branding?.tagline}
+            <button type="button" className="rail-collapse" onClick={() => setCollapsed(!collapsed)} aria-pressed={collapsed} title={collapsed ? t('Menu uitklappen', 'Expand the menu') : t('Menu inklappen', 'Collapse the menu')}>
+              {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
+              <span className="rail-label">{t('Menu inklappen', 'Collapse menu')}</span>
+            </button>
+            <span className="rail-label rail-version">
+              {t('Versie', 'Version')} 0.5.2
+            </span>
           </div>
         </aside>
         {railOpen && <div className="overlay" style={{ zIndex: 65, padding: 0 }} onClick={() => setRailOpen(false)} />}
@@ -174,6 +195,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <span className="label">{t('Vraag de assistent', 'Ask the assistant')}</span>
               </button>
             )}
+            <DisplayButtons />
             <Notifications unread={counts?.unreadNotifications ?? 0} onChange={loadCounts} />
             <UserMenu roleNames={roleNames} onTour={() => setTour(true)} />
           </header>
@@ -342,8 +364,26 @@ function Notifications({ unread, onChange }: { unread: number; onChange: () => v
   );
 }
 
+/** Language and theme, one click each, on the top bar (also on the sign-in page). */
+export function DisplayButtons() {
+  const { t, language, setLanguage, theme, setTheme } = usePrefs();
+  const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'contrast' : 'light';
+  const label = theme === 'light' ? t('Donker thema', 'Dark theme') : theme === 'dark' ? t('Hoog contrast', 'High contrast') : t('Licht thema', 'Light theme');
+  return (
+    <div className="display-btns" role="group" aria-label={t('Weergave', 'Display')}>
+      <button type="button" className="icon-btn" onClick={() => setLanguage(language === 'nl' ? 'en' : 'nl')} title={language === 'nl' ? 'Switch to English' : 'Naar Nederlands'} aria-label={language === 'nl' ? 'Switch to English' : 'Naar Nederlands'}>
+        <Languages size={19} aria-hidden="true" />
+        <span className="lang-code">{language === 'nl' ? 'EN' : 'NL'}</span>
+      </button>
+      <button type="button" className="icon-btn" onClick={() => setTheme(next)} title={label} aria-label={label}>
+        {theme === 'light' ? <Moon size={19} /> : theme === 'dark' ? <Contrast size={19} /> : <Sun size={19} />}
+      </button>
+    </div>
+  );
+}
+
 function UserMenu({ roleNames, onTour }: { roleNames: string[]; onTour: () => void }) {
-  const { t, language, setLanguage, theme, setTheme, textSize, setTextSize } = usePrefs();
+  const { t, textSize, setTextSize } = usePrefs();
   const { user, signOut } = useSession();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -359,6 +399,7 @@ function UserMenu({ roleNames, onTour }: { roleNames: string[]; onTour: () => vo
           <br />
           <span className="role">{roleNames.join(', ')}</span>
         </span>
+        <ChevronDown size={16} className={`chev${open ? ' up' : ''}`} aria-hidden="true" />
       </button>
       {open && (
         <div className="menu" role="menu">
@@ -370,14 +411,6 @@ function UserMenu({ roleNames, onTour }: { roleNames: string[]; onTour: () => vo
             <Compass size={17} /> {t('Rondleiding', 'Guided tour')}
           </button>
           <hr />
-          <div className="menu-label">{t('Weergave', 'Display')}</div>
-          <button type="button" role="menuitemradio" aria-checked={language === 'nl'} onClick={() => setLanguage(language === 'nl' ? 'en' : 'nl')}>
-            <Languages size={17} /> {language === 'nl' ? 'English' : 'Nederlands'}
-          </button>
-          <button type="button" role="menuitem" onClick={() => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'contrast' : 'light')}>
-            {theme === 'light' ? <Moon size={17} /> : theme === 'dark' ? <Contrast size={17} /> : <Sun size={17} />}
-            {theme === 'light' ? t('Donker thema', 'Dark theme') : theme === 'dark' ? t('Hoog contrast', 'High contrast') : t('Licht thema', 'Light theme')}
-          </button>
           <button type="button" role="menuitem" onClick={() => setTextSize(textSize === 'normal' ? 'large' : textSize === 'large' ? 'larger' : 'normal')}>
             <Type size={17} /> {textSize === 'normal' ? t('Grotere tekst', 'Larger text') : textSize === 'large' ? t('Nog grotere tekst', 'Even larger text') : t('Normale tekst', 'Normal text')}
           </button>

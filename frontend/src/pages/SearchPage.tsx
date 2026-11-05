@@ -6,7 +6,7 @@ import { date } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Badge, Empty, EngineInfo, ErrorNote, Field, Loading, PageHead, Panel, Proposal, Stamp, useToast } from '../ui';
+import { Badge, Empty, EngineInfo, ErrorNote, Field, Loading, PageHead, Panel, Proposal, Stamp, usePager, useToast } from '../ui';
 
 interface Hit {
   type: 'ITEM' | 'DOSSIER' | 'TASK' | 'DOCUMENT';
@@ -43,6 +43,7 @@ export default function SearchPage() {
   const [party, setParty] = useState('');
   const [classification, setClassification] = useState('');
   const [result, setResult] = useState<{ hits: Hit[]; counts: Record<string, number> } | null>(null);
+  const { page: hitRows, pager } = usePager(result?.hits ?? []);
   const [answer, setAnswer] = useState<{ answer: string; understood: string[]; count: number; rows: { id: string; identity: string | null; title: string; meta: string; date: string | null; link: string; type: string }[]; engine: EngineInfo } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +149,7 @@ export default function SearchPage() {
                 <Empty title={t('Niets gevonden', 'Nothing found')}>{t('Probeer andere woorden of minder filters.', 'Try other words or fewer filters.')}</Empty>
               ) : (
                 <ul className="list">
-                  {result.hits.map((h) => {
+                  {hitRows.map((h) => {
                     const Icon = ICONS[h.type];
                     return (
                       <li key={`${h.type}-${h.id}`}>
@@ -169,6 +170,7 @@ export default function SearchPage() {
                   })}
                 </ul>
               )}
+              {pager}
             </Panel>
           )}
         </div>

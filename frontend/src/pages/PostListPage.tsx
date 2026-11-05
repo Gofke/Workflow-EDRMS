@@ -7,7 +7,7 @@ import { useApi } from '../lib/hooks';
 import { DIRECTION, ITEM_STATE, SOURCE } from '../lib/labels';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Badge, ClassStamp, Dialog, Empty, ErrorNote, Field, Loading, PageHead, Panel, Segmented, Stamp, useToast } from '../ui';
+import { Badge, ClassStamp, Dialog, Empty, ErrorNote, Field, Loading, PageHead, Panel, Segmented, Stamp, usePager, useToast } from '../ui';
 
 export interface ItemView {
   id: string;
@@ -54,6 +54,7 @@ export default function PostListPage() {
       .filter((i) => !needle || [i.subject, i.party, i.registrationIdentity, i.senderReference].some((v) => v?.toLowerCase().includes(needle)))
       .sort((a, b) => (b.registeredAt ?? b.createdAt).localeCompare(a.registeredAt ?? a.createdAt));
   }, [data, q, state, direction]);
+  const { page: pageRows, pager } = usePager(rows);
 
   const drafts = (data ?? []).filter((i) => i.state === 'DRAFT').length;
 
@@ -130,7 +131,7 @@ export default function PostListPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((i) => (
+                {pageRows.map((i) => (
                   <tr key={i.id} className="clickable" onClick={() => navigate(`/post/${i.id}`)}>
                     <td>
                       <Stamp value={i.registrationIdentity} />
@@ -154,6 +155,7 @@ export default function PostListPage() {
                 ))}
               </tbody>
             </table>
+            {pager}
           </div>
         )}
       </Panel>

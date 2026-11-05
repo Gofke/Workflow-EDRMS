@@ -431,3 +431,50 @@ export function useOutside(ref: React.RefObject<HTMLElement>, onOutside: () => v
     };
   }, [ref, onOutside, active]);
 }
+
+/* ------------------------------------------------------------------ paging */
+
+/**
+ * Pages through a list that is already loaded: no endless scrolling, a fixed
+ * number of rows per page, and the page resets when the list changes size.
+ */
+export function usePager<T>(rows: T[], perPage = 25): { page: T[]; pager: ReactNode } {
+  const [index, setIndex] = useState(0);
+  const [size, setSize] = useState(perPage);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  useEffect(() => {
+    if (index > pages - 1) setIndex(0);
+  }, [rows.length, pages, index]);
+  const from = index * size;
+  const page = rows.slice(from, from + size);
+  const pager = <Pager total={rows.length} from={from} shown={page.length} index={index} pages={pages} size={size} onIndex={setIndex} onSize={(n) => (setSize(n), setIndex(0))} />;
+  return { page, pager };
+}
+
+export function Pager({ total, from, shown, index, pages, size, onIndex, onSize }: { total: number; from: number; shown: number; index: number; pages: number; size: number; onIndex: (i: number) => void; onSize?: (n: number) => void }) {
+  const t = useT();
+  if (total === 0) return null;
+  return (
+    <div className="pager" role="navigation" aria-label={t('Pagina’s', 'Pages')}>
+      <span className="small muted">{t(`${from + 1}–${from + shown} van ${total}`, `${from + 1}–${from + shown} of ${total}`)}</span>
+      <div className="row" style={{ gap: 6 }}>
+        {onSize && (
+          <select className="select sm" value={size} onChange={(e) => onSize(Number(e.target.value))} aria-label={t('Per pagina', 'Per page')}>
+            {[10, 25, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n} {t('per pagina', 'per page')}
+              </option>
+            ))}
+          </select>
+        )}
+        <button type="button" className="btn sm" disabled={index <= 0} onClick={() => onIndex(index - 1)}>
+          {t('Vorige', 'Previous')}
+        </button>
+        <span className="small nowrap">{`${index + 1} / ${pages}`}</span>
+        <button type="button" className="btn sm" disabled={index >= pages - 1} onClick={() => onIndex(index + 1)}>
+          {t('Volgende', 'Next')}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -7,7 +7,7 @@ import { useApi } from '../lib/hooks';
 import { CLASSIFICATION, RETENTION_ACTION } from '../lib/labels';
 import { usePrefs } from '../lib/prefs';
 import { useSession } from '../lib/session';
-import { Badge, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Stamp, Tabs, useToast } from '../ui';
+import { Badge, Dialog, Empty, ErrorNote, Field, Loading, Notice, PageHead, Panel, Segmented, Stamp, Tabs, usePager, useToast } from '../ui';
 
 type Tab = 'bewaren' | 'archiefplan' | 'bewaarplicht';
 
@@ -53,6 +53,7 @@ function RetentionTab() {
   const { has } = useSession();
   const [filter, setFilter] = useState<'due' | 'upcoming' | 'all'>('due');
   const { data, error, reload } = useApi<RetentionRow[]>(`/api/casefiles/retention?filter=${filter}`);
+  const { page: pageRows, pager } = usePager(data ?? []);
   const [deciding, setDeciding] = useState<RetentionRow | null>(null);
   const canDecide = has('RECORDS_MANAGER');
   return (
@@ -91,7 +92,7 @@ function RetentionTab() {
               </tr>
             </thead>
             <tbody>
-              {data.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id}>
                   <td className="title-cell">
                     <Stamp value={r.dossierIdentity} to={`/zaken/${r.id}?tab=archief`} /> <Link to={`/zaken/${r.id}?tab=archief`}>{r.subject}</Link>
@@ -122,6 +123,7 @@ function RetentionTab() {
             </tbody>
           </table>
         )}
+        {pager}
       </Panel>
       {deciding && <DecideDialog row={deciding} onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), void reload())} />}
     </div>

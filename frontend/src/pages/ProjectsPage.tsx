@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { date } from '../lib/format';
 import { useApi, useDebounced } from '../lib/hooks';
 import { usePrefs } from '../lib/prefs';
-import { Badge, Empty, ErrorNote, Field, Figure, Loading, PageHead, Panel, Segmented } from '../ui';
+import { Badge, Empty, ErrorNote, Field, Figure, Loading, PageHead, Panel, Segmented, usePager } from '../ui';
 import { NewProjectDialog, PortfolioTimeline, Progress, PROJECT_ROLE, ProjectStatusBadge, ProjectSummary } from '../ui/projects';
 
 type Scope = 'mine' | 'all';
@@ -30,6 +30,7 @@ export default function ProjectsPage() {
   const data = list.data?.data ?? [];
   const running = data.filter((p) => ['PROPOSED', 'ACTIVE'].includes(p.status));
   const awaiting = data.filter((p) => p.businessCaseStatus === 'SUBMITTED' && p.myRole === 'OWNER');
+  const { page: pageRows, pager } = usePager(data);
 
   return (
     <>
@@ -105,7 +106,7 @@ export default function ProjectsPage() {
       ) : (
         <Panel flush>
           <ul className="list">
-            {data.map((p) => (
+            {pageRows.map((p) => (
               <li key={p.id}>
                 <Link to={`/projecten/${p.id}`} className="project-item">
                   <span className="grow stack" style={{ gap: 6 }}>
@@ -153,6 +154,7 @@ export default function ProjectsPage() {
               </li>
             ))}
           </ul>
+          {pager}
         </Panel>
       )}
       {newOpen && <NewProjectDialog onClose={() => setNewOpen(false)} onCreated={(id) => navigate(`/projecten/${id}`)} />}
