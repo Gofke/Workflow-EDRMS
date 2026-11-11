@@ -1,6 +1,6 @@
 {
   "name": "juspol-edrms-backend",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "JusPol EDRMS - Delivery 1 Proof of Concept - backend API",
   "private": true,
   "scripts": {
@@ -58,5 +58,11 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "express": "4.22.3",
+    "body-parser": "1.20.9",
+    "multer": "2.5.0",
+    "qs": "6.16.2"
   }
 }
