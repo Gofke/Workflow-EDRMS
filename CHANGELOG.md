@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.5.3 — Module freeze: side menu on every screen, security updates
+
+- Side menu fits short laptop screens (1366 × 768 and 1280 × 720 with the browser bar): it tightens so every item stays visible above the footer; only on a very short screen does the list of items scroll, so no item is ever hidden or covered
+- Between phone and laptop width (861–1199 px) the menu shows icons only, so tables keep their room; the expand button opens the full menu over the page and it closes after a choice
+- Below laptop width a wide table scrolls inside its own box; the page never moves sideways. On a small phone the top bar and the report period buttons stay inside the screen
+- "Uitwisseling" (exchange with other ministries) is no longer in the side menu
+- Security updates of third-party libraries without changing behaviour: react-router-dom 6.30.6 (open-redirect fixes); express 4.22.3, body-parser 1.20.9, multer 2.5.0 and qs 6.16.2 (crafted-request denial-of-service fixes). Remaining moderate advisories need the NestJS 11/12 upgrade, planned after the presentation
+- Tests: backend 430, frontend 40, installer 28; module 2 (My work & interface) browser check 15/15 at widths 390–1920 px
+
 ## V0.5.2 — Interface polish for the presentation
 
 - Menu on the left can be collapsed to icons (button at the bottom; remembered per browser); the mark and the icons are centred; the menu never scrolls
