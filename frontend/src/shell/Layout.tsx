@@ -20,7 +20,6 @@ import {
   LogOut,
   Menu,
   Moon,
-  Repeat,
   Search,
   Settings,
   ShieldCheck,
@@ -41,6 +40,9 @@ import { Avatar, Mark, useOutside } from '../ui';
 import { ChatPanel } from './ChatPanel';
 import { useAssistant } from './context';
 import { Tour } from './Tour';
+
+/** Widths where the side menu shows icons only (below this the phone menu takes over). */
+const MID_WIDTH = '(min-width: 861px) and (max-width: 1199px)';
 
 interface Counts {
   openTasks: number;
@@ -68,8 +70,25 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   });
   const [tour, setTour] = useState(false);
+  // Between phone and laptop width the menu shows icons only, so tables keep their room;
+  // the expand button then opens the full menu over the page instead of pushing it aside.
+  const [narrow, setNarrow] = useState<boolean>(() => typeof window !== 'undefined' && !!window.matchMedia?.(MID_WIDTH).matches);
+  const [peek, setPeek] = useState(false);
   useEffect(() => {
-    document.documentElement.classList.toggle('rail-collapsed', collapsed);
+    const mq = window.matchMedia?.(MID_WIDTH);
+    if (!mq) return;
+    const on = () => {
+      setNarrow(mq.matches);
+      setPeek(false);
+    };
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  const iconsOnly = narrow ? !peek : collapsed;
+  useEffect(() => {
+    document.documentElement.classList.toggle('rail-collapsed', narrow || collapsed);
+  }, [narrow, collapsed]);
+  useEffect(() => {
     try {
       localStorage.setItem('juspol.rail', collapsed ? 'collapsed' : 'open');
     } catch {
@@ -90,6 +109,7 @@ export function Layout({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadCounts();
     setRailOpen(false);
+    setPeek(false);
   }, [location.pathname, loadCounts]);
   useEffect(() => {
     const timer = setInterval(() => void loadCounts(), 60_000);
@@ -130,7 +150,6 @@ export function Layout({ children }: { children: ReactNode }) {
     { group: t('Assistent', 'Assistant'), to: '/assistent', icon: <Sparkles size={19} />, label: t('Assistent', 'Assistant'), show: business, tour: 'assistant' },
     { group: t('Archief en toezicht', 'Records and oversight'), to: '/archief', icon: <Archive size={19} />, label: t('Archief', 'Archive'), show: has('RECORDS_MANAGER', 'MINISTER', 'DIRECTEUR', 'AUDITOR') },
     { to: '/logboek', icon: <ShieldCheck size={19} />, label: t('Logboek en integriteit', 'Audit and integrity'), show: has('AUDITOR', 'MINISTER', 'SYS_ADMIN') },
-    { to: '/uitwisseling', icon: <Repeat size={19} />, label: t('Uitwisseling', 'Exchange'), show: business || has('SYS_ADMIN') },
     { group: t('Organisatie', 'Organisation'), to: '/delegaties', icon: <Users size={19} />, label: t('Delegaties', 'Delegations'), show: business },
     { to: '/beheer', icon: <Settings size={19} />, label: t('Beheer', 'Administration'), show: has('SYS_ADMIN') },
     { to: '/help', icon: <HelpCircle size={19} />, label: t('Help', 'Help'), show: true },
@@ -143,9 +162,9 @@ export function Layout({ children }: { children: ReactNode }) {
         {t('Naar de inhoud', 'Skip to content')}
       </a>
       <div className="shell">
-        <aside className={`rail${railOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`} aria-label={t('Hoofdmenu', 'Main menu')}>
+        <aside className={`rail${railOpen ? ' open' : ''}${iconsOnly && !railOpen ? ' collapsed' : ''}${narrow && peek ? ' peek' : ''}`} aria-label={t('Hoofdmenu', 'Main menu')}>
           <Link to="/" className="rail-brand" title={branding?.productName ?? 'JusPol'}>
-            <Mark size={collapsed ? 36 : 44} />
+            <Mark size={iconsOnly ? 36 : 44} />
             <span className="rail-brand-text">
               <span className="rail-brand-name">{branding?.productName ?? 'JusPol'}</span>
               <span className="rail-brand-org">{branding?.organisationName ?? ''}</span>
@@ -157,7 +176,7 @@ export function Layout({ children }: { children: ReactNode }) {
               .map((n) => (
                 <div key={n.to} style={{ display: 'contents' }}>
                   {n.group && <div className="rail-group">{n.group}</div>}
-                  <NavLink to={n.to} end={n.to === '/'} data-tour={n.tour} title={collapsed ? n.label : undefined} aria-label={collapsed ? n.label : undefined}>
+                  <NavLink to={n.to} end={n.to === '/'} data-tour={n.tour} title={iconsOnly ? n.label : undefined} aria-label={iconsOnly ? n.label : undefined}>
                     {n.icon}
                     <span className="rail-label">{n.label}</span>
                     {n.count ? <span className="count">{n.count}</span> : null}
@@ -166,16 +185,17 @@ export function Layout({ children }: { children: ReactNode }) {
               ))}
           </nav>
           <div className="rail-foot">
-            <button type="button" className="rail-collapse" onClick={() => setCollapsed(!collapsed)} aria-pressed={collapsed} title={collapsed ? t('Menu uitklappen', 'Expand the menu') : t('Menu inklappen', 'Collapse the menu')}>
-              {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
+            <button type="button" className="rail-collapse" onClick={() => (narrow ? setPeek(!peek) : setCollapsed(!collapsed))} aria-pressed={iconsOnly} title={iconsOnly ? t('Menu uitklappen', 'Expand the menu') : t('Menu inklappen', 'Collapse the menu')}>
+              {iconsOnly ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
               <span className="rail-label">{t('Menu inklappen', 'Collapse menu')}</span>
             </button>
             <span className="rail-label rail-version">
-              {t('Versie', 'Version')} 0.5.2
+              {t('Versie', 'Version')} 0.5.3
             </span>
           </div>
         </aside>
         {railOpen && <div className="overlay" style={{ zIndex: 65, padding: 0 }} onClick={() => setRailOpen(false)} />}
+        {narrow && peek && <div className="overlay" style={{ zIndex: 65, padding: 0 }} onClick={() => setPeek(false)} />}
         <div className="main">
           {pub?.training.enabled && (
             <div className="banner training" role="note">
